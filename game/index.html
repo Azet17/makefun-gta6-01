@@ -1,19 +1,122 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
-<style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-</style>
+<title>Neon Tide — Palmera Bay</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
-<script type="module" src="./src/main.js"></script>
+<div id="wrap">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="objective-box">
+      <div id="mission-title">NEON TIDE</div>
+      <div id="objective-text">Explore Palmera Bay</div>
+      <div id="objective-sub"></div>
+    </div>
+    <div id="wanted-box" aria-label="wanted level"></div>
+    <div id="stats-box">
+      <div id="cash-line">$<span id="cash">0</span></div>
+      <div id="health-bar"><div id="health-fill"></div><span id="health-text">100</span></div>
+      <div id="weapon-line"><span id="weapon-name">Fists</span> <span id="ammo"></span></div>
+      <div id="speed-line" class="hidden"><span id="speed">0</span> km/h</div>
+    </div>
+    <div id="hint-line"></div>
+    <div id="toast"></div>
+    <div id="crosshair"></div>
+  </div>
+
+  <div id="menu" class="screen">
+    <div class="menu-inner">
+      <div class="kicker">AN ORIGINAL OPEN-WORLD CRIME GAME</div>
+      <h1>NEON<br>TIDE</h1>
+      <div class="subtitle">Palmera Bay &mdash; a sun-soaked city that never sleeps</div>
+      <p class="story">Mara Voss came back to Palmera Bay with a busted car, a stack of debts and
+      one name on a list: the crew that burned her brother&rsquo;s garage. Take jobs, steal cars,
+      outrun the Bay Police &mdash; and take the city back, one mission at a time.</p>
+      <div class="menu-buttons">
+        <button id="btn-new" class="btn primary">NEW GAME</button>
+        <button id="btn-continue" class="btn">CONTINUE</button>
+        <button id="btn-how" class="btn">HOW TO PLAY</button>
+      </div>
+      <div id="save-info"></div>
+      <div class="controls">
+        <span><b>WASD</b> move / drive</span><span><b>Mouse</b> aim</span>
+        <span><b>Click</b> shoot / punch</span><span><b>E</b> enter / exit car</span>
+        <span><b>Shift</b> sprint</span><span><b>R</b> reload</span>
+        <span><b>M</b> mute</span><span><b>Esc</b> pause</span>
+      </div>
+      <div class="foot">Original game &mdash; all names, city, characters, art and music are our own.</div>
+    </div>
+  </div>
+
+  <div id="howto" class="screen hidden">
+    <div class="menu-inner narrow">
+      <h2>HOW TO PLAY</h2>
+      <ul>
+        <li><b>On foot:</b> WASD to walk, Shift to sprint, mouse to aim, click to shoot or punch, E near a car to steal and drive it.</li>
+        <li><b>Driving:</b> W accelerate, S brake / reverse, A / D steer, Space handbrake. Cars are faster than running &mdash; and louder.</li>
+        <li><b>Wanted:</b> stars rise when you steal cars, hit people or shoot. Bay Police cars chase you; on foot, officers chase you. Lay low and stars fade &mdash; or finish a mission to clear them.</li>
+        <li><b>Missions:</b> follow the yellow marker on the map and minimap. Finish all six to beat the story. Cash buys ammo and repairs at the green wrench garages.</li>
+        <li><b>Combat:</b> pick up weapons from fallen rivals and the gun shop. Watch your health &mdash; eat at the diner or grab a medkit to heal.</li>
+        <li><b>Save:</b> the game autosaves after every mission. Continue from the main menu any time.</li>
+      </ul>
+      <button id="btn-how-back" class="btn primary">BACK</button>
+    </div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <div class="menu-inner narrow">
+      <h2>PAUSED</h2>
+      <p class="story">Palmera Bay waits for no one &mdash; except right now.</p>
+      <div class="menu-buttons">
+        <button id="btn-resume" class="btn primary">RESUME</button>
+        <button id="btn-save-quit" class="btn">SAVE &amp; QUIT TO MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dialogue" class="hidden">
+    <div id="dialogue-name">MARA</div>
+    <div id="dialogue-text"></div>
+    <div id="dialogue-hint">Click / Enter to continue</div>
+  </div>
+
+  <div id="endcard" class="screen hidden">
+    <div class="menu-inner narrow">
+      <h2 id="end-title">WASTED</h2>
+      <p id="end-text" class="story"></p>
+      <div class="menu-buttons">
+        <button id="btn-retry" class="btn primary">TRY AGAIN</button>
+        <button id="btn-end-menu" class="btn">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="complete" class="screen hidden">
+    <div class="menu-inner narrow">
+      <h2>NEON TIDE COMPLETE</h2>
+      <p class="story">Mara took the city back. Palmera Bay is hers now &mdash; every street, every
+      neon sign, every sunrise over the marina. Thanks for playing.</p>
+      <div id="final-stats" class="story"></div>
+      <div class="menu-buttons">
+        <button id="btn-free-roam" class="btn primary">FREE ROAM</button>
+        <button id="btn-complete-menu" class="btn">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/city.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/missions.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/save.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>
