@@ -1,115 +1,182 @@
-// Neon Tide: Palmera Bay — shared tuning and world constants.
-// Every number here is picked for a top-down open-world drive: a city
-// big enough to get lost in, cars fast enough to outrun the Bay Police,
-// and a wanted system that forgives a quiet cruise but not a crime spree.
+// Neon Tide — Palmera Bay: tuning, world layout and story data.
+// Every number here is the game's own design; change one value and the
+// whole feel of the drive changes, so keep this file as the single source.
 
-// World size in world units (1 unit ~ 1 pixel at zoom 1).
-export const WORLD_W = 3600;
-export const WORLD_H = 2600;
-
-// The five districts of Palmera Bay. Each one paints the ground a
-// different shade, spawns its own flavour of traffic and pedestrians,
-// and hosts at least one story mission.
-export const DISTRICTS = [
-  { id: 'beach',   name: 'Palmera Beach', x: 0,    y: 0,    w: 900,  h: 1300, ground: '#c9a86a', road: '#3a3f4a', accent: '#ff9d5c' },
-  { id: 'neon',    name: 'Neon Row',      x: 900,  y: 0,    w: 1200, h: 1300, ground: '#2e2a3d', road: '#23222e', accent: '#ff2e88' },
-  { id: 'harbor',  name: 'Harbor Docks',  x: 2100, y: 0,    w: 1500, h: 1300, ground: '#3d3a33', road: '#2b2a26', accent: '#ffb02e' },
-  { id: 'oldtown', name: 'Old Town',      x: 0,    y: 1300, w: 1800, h: 1300, ground: '#4a3f35', road: '#33291f', accent: '#7dd87d' },
-  { id: 'hills',   name: 'Sunset Hills',  x: 1800, y: 1300, w: 1800, h: 1300, ground: '#54423a', road: '#3a2d28', accent: '#ff5c5c' },
-];
-
-// The sea hems the city in on the west edge; the sand runs beside it.
-export const SEA = { x: 0, y: 0, w: 130, h: WORLD_H };
-export const SAND = { x: 130, y: 0, w: 90, h: WORLD_H };
-
-// Avenue / street centrelines. Roads are 96 units wide.
-export const AVENUES = [420, 1020, 1620, 2220, 2820, 3360];
-export const STREETS = [340, 840, 1340, 1840, 2340];
-export const ROAD_W = 96;
-
-// Driving and walking feel.
-export const PLAYER_WALK_SPEED = 210;
-export const PLAYER_RUN_SPEED = 320;
-export const CAR_ACCEL = 620;
-export const CAR_BRAKE = 900;
-export const CAR_MAX_SPEED = 560;
-export const CAR_REVERSE_SPEED = 200;
-export const CAR_TURN = 2.9;
-export const CAR_DRAG = 0.55;
-
-// Wanted level: 0 calm .. 5 full Bay Police lockdown.
-export const WANTED_MAX = 5;
-export const WANTED_DECAY_SECONDS = 26;
-export const POLICE_PER_STAR = 2;
-
-// Player state.
-export const PLAYER_MAX_HEALTH = 100;
-export const START_CASH = 150;
-export const SAVE_KEY = 'neon-tide-palmera-bay-save-v1';
-
-// Keyboard bindings (also shown on the start screen).
-export const KEYS = {
-  up: ['KeyW', 'ArrowUp'],
-  down: ['KeyS', 'ArrowDown'],
-  left: ['KeyA', 'ArrowLeft'],
-  right: ['KeyD', 'ArrowRight'],
-  enterCar: ['KeyE'],
-  punch: ['Space'],
-  horn: ['KeyH'],
-  pause: ['KeyP', 'Escape'],
-  mute: ['KeyM'],
-  save: ['KeyF'],
+const CONFIG = {
+  // World: one big top-down coastal city, in world pixels.
+  worldWidth: 3600,
+  worldHeight: 2800,
+  // Road grid: avenues run north-south, streets run east-west.
+  roadWidth: 56,
+  blockWidth: 260,
+  blockHeight: 210,
+  sidewalk: 14,
+  // The western edge is the bay: water, then sand, then the city.
+  waterWidth: 220,
+  beachWidth: 130,
+  // Camera and canvas.
+  viewWidth: 1280,
+  viewHeight: 720,
+  // Player car feel.
+  playerAccel: 340,
+  playerBrake: 520,
+  playerReverse: 170,
+  playerMaxSpeed: 430,
+  playerMaxReverse: 140,
+  playerTurn: 2.9,
+  playerGrip: 3.4,
+  // Police cars are a touch slower than a clean getaway car.
+  policeAccel: 330,
+  policeMaxSpeed: 415,
+  policeTurn: 2.7,
+  // Traffic cars cruise the avenues and streets.
+  trafficSpeed: 120,
+  trafficTurn: 1.6,
+  // On foot.
+  walkSpeed: 150,
+  // Wanted level: 0 to 5 stars. Heat rises on crime, cools when unseen.
+  wantedDecaySeconds: 14,
+  bustHoldSeconds: 2.2,
+  // Money.
+  startCash: 250,
+  repairCost: 120,
+  // Colours: a sun-soaked coastal palette.
+  palette: {
+    water: '#1e7fa8',
+    waterDeep: '#14648c',
+    sand: '#e8d29a',
+    sandDark: '#d9c184',
+    grass: '#7fb069',
+    park: '#6da35c',
+    road: '#3a3f4a',
+    roadEdge: '#2c3038',
+    lane: '#e8d44d',
+    sidewalk: '#b8b2a4',
+    buildingRoof: '#8a6f5c',
+    buildingRoof2: '#5c7a8a',
+    buildingRoof3: '#a85c5c',
+    buildingRoof4: '#6c8a5c',
+    buildingRoof5: '#7a5c8a',
+    plaza: '#c9c2b2',
+  },
 };
 
-// Small deterministic RNG so the city, traffic and screenshots are
-// reproducible from a seed (the ?shot= mode uses seed 1).
-export function mulberry32(seed) {
+// The five districts of Palmera Bay. Each one owns a rectangle of the map
+// and a flavour used by the HUD, the minimap legend and mission text.
+const DISTRICTS = [
+  { name: 'Marina Bay',   x: 350,  y: 0,    w: 620,  h: 1400, color: '#2f8f9d', blurb: 'Yachts, gulls and getaway boats.' },
+  { name: 'Coral Heights', x: 970, y: 0,    w: 900,  h: 900,  color: '#c96f4a', blurb: 'Penthouse glass over the bay.' },
+  { name: 'Old Town',     x: 970,  y: 900,  w: 900,  h: 1000, color: '#8a6f5c', blurb: 'Brick lanes and old money.' },
+  { name: 'Neon Strip',   x: 1870, y: 0,    w: 1730, h: 1400, color: '#b04a8a', blurb: 'Casinos, clubs, all-night neon.' },
+  { name: 'Palm Docks',   x: 1870, y: 1400, w: 1730, h: 1400, color: '#5c7a4a', blurb: 'Containers, cranes and quiet deals.' },
+];
+
+// The six story beats. Each mission names its goal, its time limit (0 means
+// no clock), the wanted level it starts at and the cash it pays.
+const MISSION_DEFS = [
+  {
+    id: 1, title: 'Hot Wire', cash: 400, timeLimit: 0, wanted: 0,
+    intro: 'Mara needs wheels. Steal any parked car on the street.',
+    objective: 'Steal a parked car (walk up to one and press E)',
+    hint: 'Parked cars sit along the kerb. Walk close and press E.',
+  },
+  {
+    id: 2, title: 'Delivery Run', cash: 900, timeLimit: 90, wanted: 1,
+    intro: 'The chop shop in Old Town wants the car. Deliver it before the clock dies.',
+    objective: 'Deliver the car to the chop shop in Old Town',
+    hint: 'Follow the gold marker on the minimap. Mind the traffic.',
+  },
+  {
+    id: 3, title: 'Heat Wave', cash: 1200, timeLimit: 75, wanted: 3,
+    intro: 'The Bay Police are on Mara now. Lose them before the timer runs out.',
+    objective: 'Lose the police: drop your wanted level to zero',
+    hint: 'Break line of sight, then stay out of sight until the heat cools.',
+  },
+  {
+    id: 4, title: 'Roadblock Run', cash: 1600, timeLimit: 120, wanted: 2,
+    intro: 'Two roadblocks guard the road to the marina. Smash through or slip around them.',
+    objective: 'Pass both roadblocks and reach the marina',
+    hint: 'Roadblocks sit on the avenues. A gap at the kerb or a hard ram both work.',
+  },
+  {
+    id: 5, title: 'The Pickup', cash: 2200, timeLimit: 150, wanted: 2,
+    intro: 'A package waits at the Palm Docks. Grab it, then take it to the penthouse in Coral Heights.',
+    objective: 'Collect the package at the docks, then deliver it uptown',
+    hint: 'The package is a glowing crate. Drive it to the gold marker.',
+  },
+  {
+    id: 6, title: 'Neon Tide', cash: 5000, timeLimit: 180, wanted: 4,
+    intro: 'The gold supercar sits outside the Neon Strip casino. Take it, then vanish to the beach hideout.',
+    objective: 'Steal the gold supercar and escape to the beach hideout',
+    hint: 'Four stars means every unit in the city is coming. Drive like it.',
+  },
+];
+
+// Parked cars the city starts with: a mix of sedans, vans and one gold supercar.
+const PARKED_CAR_COLORS = ['#c94f4f', '#4f7ec9', '#e8c84a', '#7ac94f', '#c9c9c9', '#8a5fc9', '#4fc9b8', '#e88a4f'];
+const TRAFFIC_CAR_COLORS = ['#d8d8d8', '#5a6b7a', '#b8b8a8', '#7a4a3a', '#3a5a7a', '#c9a84f'];
+
+// Small deterministic RNG so the city and the screenshots are repeatable.
+function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
-export function lerp(a, b, t) { return a + (b - a) * t; }
-export function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
-export function angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
-
-// Wrap an angle to (-PI, PI].
-export function wrapAngle(a) {
-  while (a > Math.PI) a -= Math.PI * 2;
-  while (a <= -Math.PI) a += Math.PI * 2;
-  return a;
+// Clamp a number into a range.
+function clamp(value, min, max) {
+  return value < min ? min : value > max ? max : value;
 }
 
-// Pick a random element with the supplied rng.
-export function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+// Distance between two points.
+function dist(ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
-// Car models the traffic spawns. Each has a colour set, size and top speed.
-export const CAR_MODELS = [
-  { id: 'sedan',  name: 'Bayside Sedan',  w: 46, h: 22, top: 430, colors: ['#c0392b', '#2e86c1', '#7d8a99', '#e67e22'] },
-  { id: 'taxi',   name: 'Palmera Taxi',   w: 46, h: 22, top: 450, colors: ['#f1c40f'] },
-  { id: 'sport',  name: 'Neon Comet',     w: 48, h: 21, top: 560, colors: ['#ff2e88', '#00d4ff', '#f5f5f5'] },
-  { id: 'truck',  name: 'Dock Hauler',    w: 62, h: 26, top: 330, colors: ['#5d6d7e', '#935116'] },
-  { id: 'van',    name: 'Surf Van',       w: 54, h: 24, top: 380, colors: ['#1abc9c', '#af7ac5'] },
-  { id: 'police', name: 'Bay Police',     w: 48, h: 22, top: 540, colors: ['#1a1a2e'] },
-];
+// Angle helpers: wrap an angle to [-PI, PI] and the shortest turn between two.
+function wrapAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+function angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
 
-// Pedestrian shirt colours, so the crowds do not all look alike.
-export const PED_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#ecf0f1', '#1abc9c', '#e67e22'];
+// Format seconds as M:SS for the HUD timer.
+function formatTime(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
 
-// Wanted-level labels shown under the stars.
-export const WANTED_LABELS = [
-  'Clean — keep it that way',
-  'Heat — one patrol is looking',
-  'Wanted — patrols are closing in',
-  'Hot — roadblocks ahead',
-  'Lockdown — the whole Bay is hunting you',
-  'Five stars — nowhere is safe',
-];
+// Keyboard layout. Arrows and WASD both drive; E enters and exits a car,
+// Space is the handbrake, H honks, M mutes the audio, P pauses.
+const KEYS = {
+  up: ['ArrowUp', 'KeyW'],
+  down: ['ArrowDown', 'KeyS'],
+  left: ['ArrowLeft', 'KeyA'],
+  right: ['ArrowRight', 'KeyD'],
+  enter: ['KeyE'],
+  brake: ['Space'],
+  horn: ['KeyH'],
+  mute: ['KeyM'],
+  pause: ['KeyP'],
+};
 
-// Screenshot mode (?shot=...) — fixed scenes the maker captures.
-export const SHOT_SCENES = ['start', 'drive', 'chase', 'mission'];
+// Save slot in localStorage: story progress, cash and best escape time.
+const SAVE_KEY = 'neon-tide-palmera-bay-save-v1';
+
+// Police spawn rules: units arrive off-screen and peel in from the edges.
+const POLICE = {
+  spawnDistance: 700,
+  maxUnits: 6,
+  sightRange: 620,
+  ramDamage: 6,
+  sirenRange: 900,
+};
+
+// The minimap in the HUD draws the whole city into a small square.
+const MINIMAP_SIZE = 168;

@@ -1,249 +1,274 @@
-/* Neon Tide: Palmera Bay — HUD and screens.
-   Hot pink on midnight blue: the neon-soaked look of the city at night,
-   with big readable type for the HUD and the title screens. */
+/* Neon Tide — Palmera Bay: HUD and menu styling.
+   Neon-on-midnight: hot pink titles, gold accents, glass panels. */
 
-:root {
-  --pink: #ff2e88;
-  --gold: #ffd94a;
-  --ink: #0d0d16;
-  --panel: rgba(13, 13, 22, 0.88);
-  --line: rgba(255, 255, 255, 0.16);
-}
-
-* { box-sizing: border-box; }
-
-[hidden] { display: none !important; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  margin: 0;
-  height: 100%;
+  background: #0b0e1a;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  color: #f2f2f2;
   overflow: hidden;
-  background: #0d0d16;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #f5f5f5;
 }
 
-#game {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  touch-action: none;
-  background: #14141c;
-}
-
-#status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+#stage {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  margin: 0 auto;
   overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  background: #14648c;
 }
 
-/* ---- HUD ---- */
+#game { display: block; width: 1280px; height: 720px; }
 
-#hud {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 5;
-}
+.hidden { display: none !important; }
 
-#hud-top {
+/* --- HUD ------------------------------------------------------------ */
+
+#hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+
+#hudTop {
   position: absolute;
-  top: 14px;
-  left: 16px;
-  right: 16px;
+  top: 0; left: 0; right: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  padding: 14px 16px;
 }
 
-#wanted { font-size: 26px; line-height: 1; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); }
-#wanted .star { color: rgba(255, 255, 255, 0.25); margin-right: 2px; }
-#wanted .star.on { color: var(--gold); }
-#wanted .wanted-label {
-  display: block;
-  font-size: 12px;
-  color: #ffd94a;
-  margin-top: 6px;
-  letter-spacing: 0.04em;
-}
-
-#cash {
-  font-size: 28px;
-  font-weight: 800;
-  color: #7dd87d;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
-}
-
-#objective {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+#missionBox {
+  background: rgba(8, 10, 24, 0.72);
+  border-left: 4px solid #ffd94a;
+  border-radius: 6px;
+  padding: 10px 14px;
   max-width: 460px;
-  text-align: center;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 16px;
-}
-#objective-title { display: block; font-weight: 800; color: var(--gold); font-size: 15px; }
-#objective-text { display: block; font-size: 13px; color: #eee; margin-top: 2px; }
-
-#hud-bottom {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
 }
 
-#health {
-  width: 220px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
+#missionTitle {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #ffd94a;
 }
-#health-fill { height: 100%; width: 100%; background: #2ecc71; transition: width 0.2s; }
-#health-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+
+#missionObjective { font-size: 14px; margin-top: 3px; color: #fff; }
+
+#missionTimer {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ff5d5d;
+  margin-top: 2px;
+}
+
+#wantedBox { text-align: center; }
+
+#wanted {
+  font-size: 26px;
+  letter-spacing: 4px;
+  color: #ffd94a;
+  text-shadow: 0 0 12px rgba(255, 217, 74, 0.7);
+}
+
+#wanted.hot { color: #ff3b30; text-shadow: 0 0 14px rgba(255, 59, 48, 0.9); }
+
+#district {
+  font-size: 13px;
   font-weight: 700;
-  text-shadow: 0 1px 3px #000;
+  letter-spacing: 1px;
+  background: rgba(8, 10, 24, 0.72);
+  border-radius: 4px;
+  padding: 4px 10px;
+  margin-top: 4px;
 }
 
-#speed { text-align: right; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); }
-#speed-value { font-size: 44px; font-weight: 800; line-height: 0.9; }
-#speed-unit { font-size: 14px; margin-left: 6px; color: #ccc; }
+#cashBox {
+  background: rgba(8, 10, 24, 0.72);
+  border-right: 4px solid #4fc94f;
+  border-radius: 6px;
+  padding: 10px 14px;
+  text-align: right;
+  min-width: 150px;
+}
+
+#cash { font-size: 22px; font-weight: 800; color: #4fc94f; }
+
+#carHealth { font-size: 12px; font-weight: 700; color: #ddd; margin-top: 2px; }
+
+#healthBar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.health-fill {
+  height: 100%;
+  background: #4fc94f;
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
+.health-fill.low { background: #ff3b30; }
+
+#speedBox {
+  position: absolute;
+  right: 18px;
+  bottom: 54px;
+  font-size: 34px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+#speedUnit { font-size: 15px; font-weight: 600; color: #ffd94a; }
 
 #minimap {
   position: absolute;
   right: 16px;
-  bottom: 84px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-radius: 8px;
-  background: #14141c;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  top: 96px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 6px;
+  background: #1a2a3a;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
 }
 
-#toast {
+#message {
   position: absolute;
-  top: 96px;
+  top: 108px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--panel);
-  border: 1px solid var(--gold);
-  color: var(--gold);
+  max-width: 760px;
+  text-align: center;
+  font-size: 19px;
   font-weight: 700;
-  padding: 8px 18px;
-  border-radius: 20px;
-  font-size: 15px;
-  white-space: nowrap;
+  color: #fff;
+  background: rgba(8, 10, 24, 0.78);
+  border: 1px solid rgba(255, 217, 74, 0.6);
+  border-radius: 8px;
+  padding: 10px 18px;
+  transition: opacity 0.3s;
 }
 
 #hint {
   position: absolute;
-  bottom: 16px;
+  bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 13px;
+  font-weight: 600;
   color: rgba(255, 255, 255, 0.85);
-  text-shadow: 0 1px 4px #000;
+  background: rgba(8, 10, 24, 0.6);
+  border-radius: 4px;
+  padding: 5px 12px;
   white-space: nowrap;
 }
 
-/* ---- Full-screen menus ---- */
+#fps {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+#damageFlash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 55%, rgba(255, 0, 0, 0.55) 100%);
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* --- Screens ---------------------------------------------------------- */
 
 .screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 5, 12, 0.55);
+  background: linear-gradient(160deg, rgba(11, 14, 26, 0.88), rgba(46, 16, 60, 0.82));
   z-index: 10;
 }
 
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 28px 34px;
-  max-width: 560px;
-  width: calc(100% - 40px);
   text-align: center;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  max-width: 720px;
+  padding: 36px 44px;
 }
 
 .panel h1 {
-  margin: 0;
-  font-size: 52px;
-  letter-spacing: 0.08em;
-  color: var(--pink);
-  text-shadow: 0 0 24px rgba(255, 46, 136, 0.55);
+  font-size: 64px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  background: linear-gradient(90deg, #ff5da2, #ffd94a, #4fd2ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 34px rgba(255, 93, 162, 0.35);
 }
 
 .panel h2 {
-  margin: 2px 0 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  color: var(--gold);
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: 10px;
+  color: #8fd8ff;
+  margin-top: -6px;
 }
 
-.tagline { font-size: 16px; color: #ddd; margin: 14px 0 6px; }
-.story { font-size: 14px; line-height: 1.55; color: #bbb; }
+.tagline {
+  font-size: 16px;
+  line-height: 1.55;
+  color: #e8e8e8;
+  margin: 18px 0;
+}
 
-.controls {
+#startStats {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  gap: 24px;
   justify-content: center;
-  margin: 16px 0;
-  font-size: 13px;
-  color: #ccc;
-}
-.controls b { color: var(--gold); }
-
-button {
-  pointer-events: auto;
-  background: var(--pink);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 12px 26px;
   font-size: 16px;
   font-weight: 700;
-  margin: 6px 4px 0;
-  cursor: pointer;
+  margin: 10px 0 16px;
 }
-button:hover { filter: brightness(1.15); }
-button:disabled { opacity: 0.4; cursor: default; }
-button + button { background: #2e2a3d; }
 
-.fine { font-size: 12px; color: #888; margin-top: 16px; }
+#startCash { color: #4fc94f; }
+#startProgress { color: #ffd94a; }
 
-#end-title { color: var(--gold); }
-#end-text { font-size: 15px; line-height: 1.5; }
-#end-stats { font-size: 14px; color: #bbb; }
-#pause-stats { font-size: 14px; color: #bbb; line-height: 1.6; }
+#missionList { text-align: left; margin: 8px auto 18px; max-width: 620px; }
 
-@media (max-width: 720px) {
-  #objective { max-width: 300px; }
-  #minimap { width: 150px; height: 110px; }
-  .panel h1 { font-size: 38px; }
+.mission-row {
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 5px 10px;
+  border-radius: 4px;
+  margin: 3px 0;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cfcfcf;
 }
+
+.mission-row.done { color: #7be07b; border-left: 3px solid #4fc94f; }
+.mission-row.next { color: #fff; border-left: 3px solid #ffd94a; background: rgba(255, 217, 74, 0.12); }
+.mission-row.locked { opacity: 0.6; }
+
+.controls { font-size: 13px; color: #b8c4d8; line-height: 1.7; }
+
+.enter {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffd94a;
+  margin-top: 20px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.save-note { font-size: 12px; color: #8a93a8; margin-top: 10px; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+

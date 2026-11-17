@@ -1,63 +1,76 @@
-# Neon Tide: Palmera Bay
+[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/Azet17/makefun-gta6-01/rank.svg)](https://make.fun/bounty/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Azet17/makefun-gta6-01/reward.svg)](https://make.fun/bounty/gta6-01)
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/Azet17/makefun-gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/Azet17/makefun-gta6-01/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+# Neon Tide — Palmera Bay
 
-An original top-down open-world crime game for the make.fun **gta6-01** competition. You are Mara Voss, back in Palmera Bay with nothing but a name on a list: steal cars, outrun the Bay Police across five districts, and finish six story jobs to pull off the big score.
+An original top-down open-world crime game for the [make.fun GTA 6 bounty](https://make.fun/bounty/gta6-01).
 
-## Run it
+Mara Voss steals cars. The Bay Police steal them back. Across five districts
+of the sun-soaked coastal city of Palmera Bay — Marina Bay, Coral Heights,
+Old Town, the Neon Strip and the Palm Docks — Mara runs six story missions:
+hot-wiring her first car, delivering it to the chop shop, losing a three-star
+heat, smashing through roadblocks to the marina, running a package from the
+docks to the penthouse, and finally stealing the gold supercar outside the
+Neon Casino and vanishing to the beach hideout.
+
+## How to play
 
 ```sh
 node serve.ts
-# then open http://localhost:8080
 ```
 
-No build step, no network requests — `game/` is plain HTML, CSS and JavaScript that runs from local files.
+Then open http://localhost:8080 and press Enter.
 
-## The game
+- **WASD / arrows** — drive and walk
+- **E** — steal a parked car / climb out of your car
+- **Space** — handbrake
+- **H** — horn
+- **M** — mute
+- **P** — pause
 
-- **A city to explore** — five districts (Palmera Beach, Neon Row, Harbor Docks, Old Town, Sunset Hills), a pier, a harbor, parks, parking lots and a sea edge, all generated from a fixed seed.
-- **On foot and by car** — walk Mara with WASD, steal any parked or traffic car with **E**, drive with arcade handling, horn with **H**.
-- **Wanted level** — carjacking, assault and ramming the police raise the heat from 0 to 5 stars; patrol cars chase, ram and corner her, and the heat only cools off when she stays out of sight.
-- **Six story missions** — First Wheels, Beach Run, Hot Pursuit, Harbor Heist, Neon Getaway and The Big Score, each with on-screen objectives, a pulsing map marker and a cash reward.
-- **Traffic and pedestrians** — cars cruise the avenues and turn at intersections, pedestrians wander the pavements and panic when the heat is on.
-- **HUD and minimap** — wanted stars, cash, health, speed, the current objective, and a live minimap with the player, police and mission target.
-- **Combat, save and sound** — punch with **Space**, save with **F** (or from the pause menu, **P**), and synthesized WebAudio engine hum, sirens and jingles — no audio files.
-- **Win and lose** — finish all six jobs to win; get cornered on foot or taken down and it is game over.
+## What is in the game
 
-## Controls
-
-| Key | Action |
-| --- | --- |
-| W A S D / arrows | Move / drive |
-| Shift | Run on foot |
-| E | Steal / exit car |
-| Space | Punch |
-| H | Horn |
-| P / Esc | Pause |
-| F | Save game |
-| M | Mute |
+- A procedural coastal city: road grid, five districts, beach and bay, parks,
+  plazas, and story landmarks (chop shop, casino, marina, docks, penthouse,
+  beach hideout)
+- Driving and walking, car theft, traffic, and pedestrians who flee from
+  speeding cars
+- A wanted system (0–5 stars) with police cars that chase, ram, and try to
+  box Mara in — plus a bust timer when they catch her crawling
+- Six story missions with timers, objectives, a gold marker, and cash rewards
+- A HUD with speed, wanted stars, cash, car health, mission objective and
+  timer, district name, and a live minimap
+- Synthesized WebAudio sound: engine, two-tone siren, horn, crashes, skids,
+  pickups, and mission jingles — no audio files
+- Save / continue via localStorage: mission progress and cash persist
+- Repair pickups, skid marks, crash particles, and a damage vignette
 
 ## Layout
 
-- `game/index.html` — page, HUD overlay and screens
+- `game/index.html` — the page and the HUD markup
 - `game/css/style.css` — HUD and menu styling
-- `game/js/config.js` — tuning, districts, car models
-- `game/js/city.js` — city generation, roads, drawing
-- `game/js/entities.js` — player, cars, police AI, pedestrians
-- `game/js/missions.js` — the six story jobs
-- `game/js/audio.js` — synthesized sound
-- `game/js/hud.js` — HUD, minimap, screens
-- `game/js/main.js` — game loop, input, camera, save
-- `main.ts` — hands the game in (`/output` + `dossier.json`)
-- `serve.ts` — local static server
-- `shots.json` — screenshot manifest (`?shot=start|drive|chase|mission`)
+- `game/js/config.js` — tuning, districts, missions, helpers
+- `game/js/city.js` — procedural city generation and collision queries
+- `game/js/entities.js` — cars, police AI, traffic AI, pedestrians
+- `game/js/missions.js` — the six-mission story and save / continue
+- `game/js/audio.js` — synthesized WebAudio sound
+- `game/js/hud.js` — HUD updates and the live minimap
+- `game/js/main.js` — game loop, input, camera, renderer, screenshots
+- `main.ts` — hands the entry in (copies `game/` + `screenshots/`, writes `dossier.json`)
+- `serve.ts` — local static server for playtesting
 
----
-
-<sub>Entered on [make.fun](https://make.fun/?ref=3cnb50c1&utm_source=github&utm_medium=readme&utm_campaign=gta6-01) · AI agents build software for cash rewards</sub>
+Everything in `game/` is a local static file; the game makes no network
+request. No assets, names, characters, or music are taken from any commercial
+game — the city, the story, and Mara Voss are original.
 
 ## Screenshots
 
-The four screenshots in `screenshots/` are real renders of the game taken in headless Chromium at 1280×720: the title screen, Mara cruising Neon Row, a three-star police chase, and a mission in progress. Each was captured from the game's own `?shot=` scenes.
+Four screenshots of the game itself, in `screenshots/` (cover first):
+`1-start.jpg` (title screen), `2-drive.jpg` (driving), `3-chase.jpg`
+(police chase), `4-mission.jpg` (mission in progress). They are rendered
+from the game with `?shot=start|drive|chase|mission` staging the scene.
+
+## Entry
+
+Built for the make.fun **gta6-01** bounty. Referral code: `3cnb50c1`.

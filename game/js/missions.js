@@ -1,205 +1,254 @@
-// Neon Tide: Palmera Bay — the story.
-// Six jobs for Mara Voss. Each mission is a chain of steps; a step is
-// finished by reaching a place, stealing a car, collecting a package, or
-// surviving a chase. Finishing a mission pays cash, and the last one
-// wins the game.
+// Neon Tide — Palmera Bay: the story.
+// Six missions, played in order. Each mission has stages (a small state
+// machine per mission) so the objective, the marker and the win condition
+// all move together. Progress is saved to localStorage after every
+// completed mission, so the player can continue later.
 
-import { dist } from './config.js';
+// Mission runtime state. `stage` is per-mission; `target` is the world
+// point the gold marker points at, or null when the goal is not a place.
+const Missions = (function () {
+  const state = {
+    index: 0,          // 0-based: which mission is active
+    active: false,     // a mission is running right now
+    stage: 0,          // per-mission stage
+    timer: 0,          // seconds left (0 = no clock)
+    target: null,      // {x, y, label} or null
+    passedRoadblocks: 0,
+    hasPackage: false,
+    evadeTime: 0,      // seconds spent unseen during mission 3
+    message: '',       // banner text shown when the mission changes
+    messageTimer: 0,
+    completed: [],     // mission ids finished this story
+    cash: CONFIG.startCash,
+    storyDone: false,
+  };
 
-// Landmark lookups come from the city at runtime (buildCity landmarks).
-function landmark(city, id) {
-  return city.landmarks.find((l) => l.id === id);
-}
+  function def() { return MISSION_DEFS[state.index]; }
 
-// Mission definitions. `steps` run in order; `kind` decides the check:
-//   goto     — get within `radius` of (x, y)
-//   steal    — be inside any car (or the named model)
-//   collect  — reach the pickup point (a floating package)
-//   survive  — stay alive with the wanted level for `seconds`
-//   deliver  — reach the drop-off while driving the mission vehicle
-export const MISSIONS = [
-  {
-    id: 'm1', title: '1 · First Wheels',
-    briefing: 'No wheels, no work. Lift a car off the street and bring it to the Pier.',
-    steps: [
-      { kind: 'steal', text: 'Steal any car — walk up to one and press E' },
-      { kind: 'goto', lm: 'pier', radius: 110, text: 'Drive to Palmera Pier' },
-    ],
-    reward: 400,
-  },
-  {
-    id: 'm2', title: '2 · Beach Run',
-    briefing: 'A package is buried by the lifeguard hut. Grab it and get it to Neon Plaza — quietly.',
-    steps: [
-      { kind: 'collect', lm: 'pier', radius: 70, text: 'Pick up the package at the Pier' },
-      { kind: 'goto', lm: 'neon-plaza', radius: 100, text: 'Deliver the package to Neon Plaza' },
-    ],
-    reward: 650,
-  },
-  {
-    id: 'm3', title: '3 · Hot Pursuit',
-    briefing: 'The Bay PD knows your face now. Lose them — or at least outrun them to the Docks.',
-    steps: [
-      { kind: 'goto', lm: 'docks', radius: 120, text: 'Reach the Harbor Docks Gate', wanted: 2 },
-      { kind: 'survive', seconds: 20, text: 'Survive the heat for 20 seconds' },
-    ],
-    reward: 900,
-  },
-  {
-    id: 'm4', title: '4 · Harbor Heist',
-    briefing: 'A Dock Hauler full of untraceable gear is parked at the Docks. Take it to the Old Town Garage.',
-    steps: [
-      { kind: 'steal', model: 'truck', text: 'Steal the Dock Hauler truck' },
-      { kind: 'deliver', lm: 'garage', radius: 110, text: 'Deliver the truck to Old Town Garage' },
-    ],
-    reward: 1400,
-  },
-  {
-    id: 'm5', title: '5 · Neon Getaway',
-    briefing: 'Your crew contact is waiting at Neon Plaza. Pick her up, then shake the tail all the way to the Safehouse.',
-    steps: [
-      { kind: 'collect', lm: 'neon-plaza', radius: 80, text: 'Pick up the crew contact at Neon Plaza' },
-      { kind: 'goto', lm: 'safehouse', radius: 120, text: 'Reach the Sunset Safehouse', wanted: 3 },
-      { kind: 'survive', seconds: 15, text: 'Hold out until the heat dies down' },
-    ],
-    reward: 2000,
-  },
-  {
-    id: 'm6', title: '6 · The Big Score',
-    briefing: 'Bay National Bank. One grab, five stars of heat, and a straight run home. Do not get caught.',
-    steps: [
-      { kind: 'collect', lm: 'bank', radius: 80, text: 'Grab the score at Bay National Bank', wanted: 4 },
-      { kind: 'goto', lm: 'safehouse', radius: 120, text: 'Escape to the Sunset Safehouse' },
-    ],
-    reward: 5000,
-  },
-];
+  // Start (or restart) the current mission: reset its stages, set the
+  // wanted level it opens with and place its first marker.
+  function startMission(game) {
+    const d = def();
+    if (!d) { state.active = false; state.storyDone = true; return; }
+    state.active = true;
+    state.stage = 0;
+    state.timer = d.timeLimit;
+    state.passedRoadblocks = 0;
+    state.hasPackage = false;
+    state.evadeTime = 0;
+    state.message = d.title + ' — ' + d.intro;
+    state.messageTimer = 5;
+    game.wanted = d.wanted;
+    game.wantedHeat = d.wanted > 0 ? 1 : 0;
+    setTarget(game);
+  }
 
-// Runtime state for the mission chain.
-export function makeMissionState() {
-  return { index: 0, step: 0, timer: 0, done: false, won: false, packageAt: null };
-}
+  // Where the gold marker points for the current mission and stage.
+  function setTarget(game) {
+    const L = City.data.landmarks;
+    const i = state.index;
+    if (i === 0) { state.target = null; return; }                       // steal any car
+    if (i === 1) { state.target = { x: L.chopShop.x, y: L.chopShop.y, label: 'Chop Shop' }; return; }
+    if (i === 2) { state.target = null; return; }                       // lose the heat
+    if (i === 3) { state.target = state.passedRoadblocks >= 2
+      ? { x: L.marina.x, y: L.marina.y, label: 'Marina' }
+      : { x: L.marina.x, y: L.marina.y, label: 'Marina (via roadblocks)' }; return; }
+    if (i === 4) {
+      state.target = state.stage === 0
+        ? { x: L.docks.x, y: L.docks.y, label: 'Package at the Docks' }
+        : { x: L.penthouse.x, y: L.penthouse.y, label: 'Penthouse' };
+      return;
+    }
+    if (i === 5) {
+      state.target = state.stage === 0
+        ? { x: L.casino.x, y: L.casino.y, label: 'Gold Supercar' }
+        : { x: L.hideout.x, y: L.hideout.y, label: 'Beach Hideout' };
+      return;
+    }
+    state.target = null;
+  }
 
-// The current step's world position (from its landmark), or null.
-export function currentTarget(city, ms) {
-  const m = MISSIONS[ms.index];
-  if (!m || ms.done) return null;
-  const step = m.steps[ms.step];
-  if (!step || !step.lm) return null;
-  const lm = landmark(city, step.lm);
-  return lm ? { x: lm.x, y: lm.y, radius: step.radius || 100, text: step.text } : null;
-}
+  // The objective line the HUD shows right now.
+  function objectiveText() {
+    if (!state.active) return 'Press Enter to start the story';
+    const d = def();
+    if (state.index === 3) return 'Pass roadblocks: ' + state.passedRoadblocks + '/2, then reach the Marina';
+    if (state.index === 4 && state.stage === 1) return 'Deliver the package to the Penthouse';
+    if (state.index === 5 && state.stage === 1) return 'Escape to the Beach Hideout — do not get busted';
+    if (state.index === 2) return 'Lose the police (' + Math.ceil(state.evadeTime) + 's unseen)';
+    return d.objective;
+  }
 
-export function currentStepText(ms) {
-  const m = MISSIONS[ms.index];
-  if (!m) return '';
-  if (ms.done) return 'All jobs done — Palmera Bay is yours.';
-  const step = m.steps[ms.step];
-  return step ? step.text : '';
-}
-
-export function currentMissionTitle(ms) {
-  const m = MISSIONS[ms.index];
-  return m ? m.title : 'Free roam';
-}
-
-// Advance the mission chain. Returns an event string when something
-// happens ('step', 'mission', 'win') or null. Mutates the player only
-// through the callbacks the caller supplies (cash, wanted).
-export function updateMissions(city, ms, player, dt, events) {
-  const m = MISSIONS[ms.index];
-  if (!m || ms.done) return null;
-  const step = m.steps[ms.step];
-  if (!step) return null;
-
-  const px = player.inCar ? player.inCar.x : player.x;
-  const py = player.inCar ? player.inCar.y : player.y;
-  let advanced = false;
-
-  if (step.kind === 'goto' || step.kind === 'collect' || step.kind === 'deliver') {
-    const lm = landmark(city, step.lm);
-    if (lm && dist(px, py, lm.x, lm.y) < (step.radius || 100)) {
-      if (step.kind === 'deliver' && (!player.inCar || player.inCar.model.id !== 'truck')) {
-        // Deliver needs the truck; standing there on foot does not count.
-      } else {
-        advanced = true;
+  // Tick the mission clock and the per-mission win/lose checks.
+  // Returns 'complete' | 'failed' | null.
+  function update(game, dt) {
+    if (!state.active) return null;
+    const d = def();
+    if (state.messageTimer > 0) state.messageTimer -= dt;
+    if (state.timer > 0) {
+      state.timer -= dt;
+      if (state.timer <= 0) {
+        state.timer = 0;
+        return fail(game, 'Out of time — ' + d.title + ' failed.');
       }
     }
-    if (step.kind === 'collect' && step.wanted && player.wanted < step.wanted) {
-      player.wanted = step.wanted;
+    const p = game.player;
+    const inCar = !!game.playerCar;
+    const L = City.data.landmarks;
+
+    if (state.index === 0) {
+      if (inCar) return complete(game);
     }
-    if (step.kind === 'goto' && step.wanted && player.wanted < step.wanted && advanced) {
-      player.wanted = step.wanted;
+    if (state.index === 1) {
+      if (inCar && dist(p.x, p.y, L.chopShop.x, L.chopShop.y) < 70) return complete(game);
     }
-  } else if (step.kind === 'steal') {
-    if (player.inCar && (!step.model || player.inCar.model.id === step.model)) advanced = true;
-  } else if (step.kind === 'survive') {
-    ms.timer += dt;
-    if (ms.timer >= step.seconds) advanced = true;
-  }
-
-  if (!advanced) return null;
-  ms.timer = 0;
-  ms.step += 1;
-  if (ms.step >= m.steps.length) {
-    player.cash += m.reward;
-    events.push({ type: 'mission', text: `${m.title} complete — +$${m.reward}` });
-    ms.index += 1;
-    ms.step = 0;
-    if (ms.index >= MISSIONS.length) {
-      ms.done = true;
-      ms.won = true;
-      return 'win';
+    if (state.index === 2) {
+      if (game.wanted === 0) return complete(game);
+      // Unseen time only counts while no police unit can see the player.
+      if (!game.policeCanSee) state.evadeTime += dt;
     }
-    return 'mission';
+    if (state.index === 3) {
+      if (state.passedRoadblocks >= 2 && dist(p.x, p.y, L.marina.x, L.marina.y) < 80) return complete(game);
+    }
+    if (state.index === 4) {
+      if (state.stage === 0 && dist(p.x, p.y, L.docks.x, L.docks.y) < 70) {
+        state.stage = 1;
+        state.hasPackage = true;
+        state.message = 'Package secured. Now take it to the Penthouse in Coral Heights.';
+        state.messageTimer = 5;
+        setTarget(game);
+      } else if (state.stage === 1 && dist(p.x, p.y, L.penthouse.x, L.penthouse.y) < 70) {
+        return complete(game);
+      }
+    }
+    if (state.index === 5) {
+      if (state.stage === 0 && game.playerCar && game.playerCar.gold) {
+        state.stage = 1;
+        state.message = 'The gold supercar is yours. Now vanish — the whole city is coming.';
+        state.messageTimer = 5;
+        game.wanted = 4;
+        game.wantedHeat = 1;
+        setTarget(game);
+      } else if (state.stage === 1 && dist(p.x, p.y, L.hideout.x, L.hideout.y) < 90) {
+        return complete(game);
+      }
+    }
+    return null;
   }
-  return 'step';
-}
 
-// ---- Heat and markers ----
-
-// Some steps carry a wanted level: the job itself draws the heat.
-// Apply it while the step is active so the chase starts with the job.
-export function applyStepHeat(ms, player) {
-  const m = MISSIONS[ms.index];
-  if (!m || ms.done) return;
-  const step = m.steps[ms.step];
-  if (step && step.wanted && player.wanted < step.wanted) {
-    player.wanted = step.wanted;
-    player.wantedTimer = 0;
+  // Called when the player smashes or slips past a roadblock.
+  function roadblockPassed(game) {
+    if (state.active && state.index === 3) {
+      state.passedRoadblocks++;
+      state.message = 'Roadblock down — ' + state.passedRoadblocks + ' of 2.';
+      state.messageTimer = 3;
+      if (state.passedRoadblocks >= 2) setTarget(game);
+    }
   }
-}
 
-// Draw the mission target: a pulsing ring and a bouncing arrow, plus a
-// floating package when the step is a pickup.
-export function drawMissionTarget(ctx, cam, city, ms, time) {
-  const t = currentTarget(city, ms);
-  if (!t) return;
-  const m = MISSIONS[ms.index];
-  const step = m.steps[ms.step];
-  const pulse = 1 + Math.sin(time * 4) * 0.12;
-  ctx.strokeStyle = '#ffd94a';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(t.x - cam.x, t.y - cam.y, (t.radius * 0.45) * pulse, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(255,217,74,0.18)';
-  ctx.beginPath();
-  ctx.arc(t.x - cam.x, t.y - cam.y, (t.radius * 0.45) * pulse, 0, Math.PI * 2);
-  ctx.fill();
-  // A bouncing marker above the target so it reads from far away.
-  const bob = Math.sin(time * 5) * 6;
-  ctx.fillStyle = '#ffd94a';
-  ctx.beginPath();
-  ctx.moveTo(t.x - cam.x, t.y - 52 + bob - cam.y);
-  ctx.lineTo(t.x - 10 - cam.x, t.y - 70 + bob - cam.y);
-  ctx.lineTo(t.x + 10 - cam.x, t.y - 70 + bob - cam.y);
-  ctx.closePath();
-  ctx.fill();
-  if (step.kind === 'collect') {
-    ctx.fillStyle = '#ff9d5c';
-    ctx.fillRect(t.x - 10 - cam.x, t.y - 10 - cam.y, 20, 16);
-    ctx.fillStyle = '#ffd94a';
-    ctx.fillRect(t.x - 10 - cam.x, t.y - 3 - cam.y, 20, 3);
+  // Called when the player steals a car (any car, any mission).
+  function carStolen(game) {
+    if (game.wanted < 1) { game.wanted = 1; game.wantedHeat = 1; }
   }
-}
+
+  function complete(game) {
+    const d = def();
+    state.completed.push(d.id);
+    state.cash += d.cash;
+    state.message = d.title + ' complete! +$' + d.cash;
+    state.messageTimer = 5;
+    state.active = false;
+    state.target = null;
+    save(game);
+    return 'complete';
+  }
+
+  function fail(game, reason) {
+    state.message = reason;
+    state.messageTimer = 6;
+    state.active = false;
+    state.target = null;
+    save(game);
+    return 'failed';
+  }
+
+  // Move on to the next mission after a completed one. Returns false when
+  // the story is over (all six done).
+  function nextMission(game) {
+    state.index++;
+    if (state.index >= MISSION_DEFS.length) {
+      state.storyDone = true;
+      state.message = 'NEON TIDE COMPLETE — Mara owns Palmera Bay.';
+      state.messageTimer = 8;
+      save(game);
+      return false;
+    }
+    startMission(game);
+    return true;
+  }
+
+  // Retry the mission that just failed.
+  function retryMission(game) {
+    startMission(game);
+  }
+
+  // One line per mission for the start screen: title, cash and status.
+  function briefingLines() {
+    return MISSION_DEFS.map((d, i) => {
+      const done = state.completed.includes(d.id);
+      const current = i === state.index && !state.storyDone;
+      const mark = done ? 'DONE' : current ? 'NEXT' : 'LOCKED';
+      return { id: d.id, title: d.title, cash: d.cash, mark, intro: d.intro };
+    });
+  }
+
+  // Story progress as a fraction, for the start screen progress bar.
+  function progressFraction() {
+    return state.completed.length / MISSION_DEFS.length;
+  }
+
+  // --- Save / continue -----------------------------------------------
+
+  function save(game) {
+    try {
+      const data = {
+        index: state.index,
+        completed: state.completed,
+        cash: state.cash,
+        storyDone: state.storyDone,
+        wanted: game ? game.wanted : 0,
+      };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    } catch (e) { /* storage unavailable: the story just does not persist */ }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (typeof data.index !== 'number') return false;
+      state.index = clamp(data.index, 0, MISSION_DEFS.length - 1);
+      state.completed = Array.isArray(data.completed) ? data.completed : [];
+      state.cash = typeof data.cash === 'number' ? data.cash : CONFIG.startCash;
+      state.storyDone = !!data.storyDone;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function reset(game) {
+    state.index = 0;
+    state.completed = [];
+    state.cash = CONFIG.startCash;
+    state.storyDone = false;
+    state.active = false;
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+    startMission(game);
+  }
+
+  return {
+    state, def, startMission, setTarget, objectiveText, update,
+    roadblockPassed, carStolen, complete, fail, nextMission, retryMission,
+    briefingLines, progressFraction, save, load, reset,
+  };
+})();
