@@ -1,1 +1,31 @@
+# Neon Tide: Palmera Bay — files git leaves out.
+# Build output, local tooling and OS clutter stay out of the repo;
+# the game, the screenshots and the hand-in program are all tracked.
+
+node_modules/
 out/
+/output
+dist/
+build/
+
+# Local environment and editor state.
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Playwright and test artefacts.
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Scratch files.
+*.tmp
+*.swp
+
+# OS and editor leftovers, plus anything the kit check writes locally.
+coverage/
+.cache/

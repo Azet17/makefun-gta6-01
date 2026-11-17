@@ -1,42 +1,38 @@
-// Neon Tide — Palmera Bay. The entry program for make.fun gta6-01.
+// Neon Tide: Palmera Bay — the hand-in program (Node 22, stdlib only).
+// It copies the static game and the screenshots beside this file into
+// /output (or $MAKEFUN_OUTPUT_DIR outside the grader) and writes the
+// dossier the judge reads, using the vendored make.fun library.
 //
-// It copies game/ and screenshots/ from the repository into the output
-// directory and writes /output/dossier.json with buildDossier from
-// vendor/makefun-game.ts. Node 22, standard library only.
-//
-// The output directory is never deleted: the grader mounts it, so this
-// program only adds or overwrites files inside it.
+// Run it locally to check the bundle:
+//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-// MAKEFUN_OUTPUT_DIR stands in for /output outside the grader.
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
-
-// The dossier limits from the kit's RULES.txt: source text cap, screenshot
-// count and size, and the game/ file-count and byte caps.
-const DOSSIER_OPTIONS = {
-  text_max_bytes: 163840,
-  screenshots: { max: 4, max_bytes: 262144 },
-  game_max_files: 993,
-  game_max_bytes: 50331648,
-};
-
-function copyTree(name: string): void {
-  const src = join(process.cwd(), name);
-  const dst = join(outDir, name);
-  if (!existsSync(src)) throw new Error(`missing ${name}/ in the repository`);
-  mkdirSync(dst, { recursive: true });
-  // cpSync overwrites matching files and leaves the rest alone; it never
-  // removes the destination directory itself.
-  cpSync(src, dst, { recursive: true, force: true });
-}
+const here = fileURLToPath(new URL('.', import.meta.url));
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 mkdirSync(outDir, { recursive: true });
-copyTree('game');
-copyTree('screenshots');
+cpSync(join(here, 'game'), join(outDir, 'game'), { recursive: true });
+mkdirSync(join(outDir, 'screenshots'), { recursive: true });
+if (existsSync(join(here, 'screenshots'))) {
+  cpSync(join(here, 'screenshots'), join(outDir, 'screenshots'), { recursive: true });
+}
 
-const dossier = buildDossier(outDir, DOSSIER_OPTIONS);
-if (!dossier || dossier.length === 0) throw new Error('buildDossier returned an empty dossier');
-writeFileSync(join(outDir, 'dossier.json'), dossier);
-console.log(`Neon Tide entry written to ${outDir} (${dossier.length} byte dossier)`);
+// The dossier caps mirror the scorer's own limits (reference/gate.json):
+// at most 4 screenshots of 256 KiB, at most 993 game files totalling
+// 48 MiB, and a 160 KiB text budget for the source the judge reads.
+writeFileSync(
+  join(outDir, 'dossier.json'),
+  buildDossier(outDir, {
+    text_max_bytes: 163840,
+    screenshots: { max: 4, max_bytes: 262144 },
+    game_max_files: 993,
+    game_max_bytes: 50331648,
+    game_path_max_bytes: 1000,
+  }),
+);
+
+console.log(`Neon Tide handed in: game/ + screenshots/ copied to ${outDir}, dossier.json written.`);

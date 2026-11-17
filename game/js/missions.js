@@ -1,265 +1,205 @@
-/* Neon Tide — story missions. Six missions, each a list of steps:
-   goto / steal (take a car, then reach a point) / fight (defeat rivals) /
-   collect (grab cash drops) / escape (lose the wanted level). */
-'use strict';
+// Neon Tide: Palmera Bay — the story.
+// Six jobs for Mara Voss. Each mission is a chain of steps; a step is
+// finished by reaching a place, stealing a car, collecting a package, or
+// surviving a chase. Finishing a mission pays cash, and the last one
+// wins the game.
 
-const MISSIONS = [
+import { dist } from './config.js';
+
+// Landmark lookups come from the city at runtime (buildCity landmarks).
+function landmark(city, id) {
+  return city.landmarks.find((l) => l.id === id);
+}
+
+// Mission definitions. `steps` run in order; `kind` decides the check:
+//   goto     — get within `radius` of (x, y)
+//   steal    — be inside any car (or the named model)
+//   collect  — reach the pickup point (a floating package)
+//   survive  — stay alive with the wanted level for `seconds`
+//   deliver  — reach the drop-off while driving the mission vehicle
+export const MISSIONS = [
   {
-    id: 1, title: 'THE PICKUP', reward: 400,
-    intro: [
-      ['MARA', 'Back in Palmera Bay. First job: pick up a package from the marina and bring it to Rico. No cops, no noise.'],
-      ['RICO', 'Package is at the marina, by the blue crates. Bring it to my garage in Old Harbor. And Mara — drive like you mean it.'],
-    ],
+    id: 'm1', title: '1 · First Wheels',
+    briefing: 'No wheels, no work. Lift a car off the street and bring it to the Pier.',
     steps: [
-      { type: 'goto', at: 'marina', text: 'Pick up the package at the Marina', sub: 'Follow the yellow marker' },
-      { type: 'goto', at: 'harbor', text: 'Deliver the package to Rico in Old Harbor', sub: 'Rico is waiting at the garage' },
+      { kind: 'steal', text: 'Steal any car — walk up to one and press E' },
+      { kind: 'goto', lm: 'pier', radius: 110, text: 'Drive to Palmera Pier' },
     ],
+    reward: 400,
   },
   {
-    id: 2, title: 'HOT WHEELS', reward: 700,
-    intro: [
-      ['LENA', 'A Comet GT is parked outside the Coral Heights club. No alarm, no owner in sight. Take it — the crew needs wheels.'],
-      ['MARA', 'Stealing a car in broad daylight. What could go wrong?'],
-    ],
+    id: 'm2', title: '2 · Beach Run',
+    briefing: 'A package is buried by the lifeguard hut. Grab it and get it to Neon Plaza — quietly.',
     steps: [
-      { type: 'steal', at: 'heights', text: 'Steal the Comet GT in Coral Heights', sub: 'Walk up to it and press E — the cops will notice' },
-      { type: 'goto', at: 'downtown', text: 'Deliver the Comet GT to the Downtown chop shop', sub: 'Stay in the car — the marker is the drop-off' },
+      { kind: 'collect', lm: 'pier', radius: 70, text: 'Pick up the package at the Pier' },
+      { kind: 'goto', lm: 'neon-plaza', radius: 100, text: 'Deliver the package to Neon Plaza' },
     ],
+    reward: 650,
   },
   {
-    id: 3, title: 'DOCKSIDE DEAL', reward: 900,
-    intro: [
-      ['RICO', 'The Tide crew is meeting at the docks. They think they run this city. Show them they are wrong.'],
-      ['MARA', 'I brought my pistol. Let us talk business.'],
-    ],
+    id: 'm3', title: '3 · Hot Pursuit',
+    briefing: 'The Bay PD knows your face now. Lose them — or at least outrun them to the Docks.',
     steps: [
-      { type: 'goto', at: 'dockside', text: 'Reach the Dockside meeting', sub: 'Rivals are waiting — be ready' },
-      { type: 'fight', at: 'dockside', count: 5, text: 'Take down the Tide crew (0/5)', sub: 'Aim with the mouse, click to shoot' },
-      { type: 'collect', at: 'dockside', count: 3, text: 'Grab the Tide crew cash (0/3)', sub: 'Walk over the green cash drops' },
+      { kind: 'goto', lm: 'docks', radius: 120, text: 'Reach the Harbor Docks Gate', wanted: 2 },
+      { kind: 'survive', seconds: 20, text: 'Survive the heat for 20 seconds' },
     ],
+    reward: 900,
   },
   {
-    id: 4, title: 'GETAWAY', reward: 1000,
-    intro: [
-      ['LENA', 'The cops saw your face at the docks. They are coming in hot — three stars and climbing. Lose them.'],
-      ['MARA', 'Then I drive. Hold on.'],
-    ],
+    id: 'm4', title: '4 · Harbor Heist',
+    briefing: 'A Dock Hauler full of untraceable gear is parked at the Docks. Take it to the Old Town Garage.',
     steps: [
-      { type: 'escape', text: 'Lose the Bay Police', sub: 'Break line of sight and stay quiet until the stars fade' },
+      { kind: 'steal', model: 'truck', text: 'Steal the Dock Hauler truck' },
+      { kind: 'deliver', lm: 'garage', radius: 110, text: 'Deliver the truck to Old Town Garage' },
     ],
+    reward: 1400,
   },
   {
-    id: 5, title: 'THE VAULT', reward: 1400,
-    intro: [
-      ['RICO', 'The Tide crew stashed their money in a Downtown office. Grab the cash, get out clean.'],
-      ['MARA', 'A vault job. Finally, something fun.'],
-    ],
+    id: 'm5', title: '5 · Neon Getaway',
+    briefing: 'Your crew contact is waiting at Neon Plaza. Pick her up, then shake the tail all the way to the Safehouse.',
     steps: [
-      { type: 'goto', at: 'downtown', text: 'Reach the Downtown office', sub: 'Guards inside — expect a fight' },
-      { type: 'fight', at: 'downtown', count: 4, text: 'Clear the office guards (0/4)', sub: 'Four guards between you and the vault' },
-      { type: 'collect', at: 'downtown', count: 4, text: 'Grab the vault cash (0/4)', sub: 'Walk over the green cash drops' },
-      { type: 'goto', at: 'beach', text: 'Escape to the beach rendezvous', sub: 'Lena is waiting at the shore' },
+      { kind: 'collect', lm: 'neon-plaza', radius: 80, text: 'Pick up the crew contact at Neon Plaza' },
+      { kind: 'goto', lm: 'safehouse', radius: 120, text: 'Reach the Sunset Safehouse', wanted: 3 },
+      { kind: 'survive', seconds: 15, text: 'Hold out until the heat dies down' },
     ],
+    reward: 2000,
   },
   {
-    id: 6, title: 'NEON TIDE', reward: 2500,
-    intro: [
-      ['LENA', 'This is it. The Tide crew boss is at the marina with the whole gang. End this tonight.'],
-      ['MARA', 'For my brother. For the garage. For Palmera Bay.'],
-    ],
+    id: 'm6', title: '6 · The Big Score',
+    briefing: 'Bay National Bank. One grab, five stars of heat, and a straight run home. Do not get caught.',
     steps: [
-      { type: 'goto', at: 'marina', text: 'Reach the marina for the final fight', sub: 'The whole Tide crew is there' },
-      { type: 'fight', at: 'marina', count: 8, text: 'Take down the Tide crew (0/8)', sub: 'Eight rivals. No mercy, no retreat.' },
-      { type: 'goto', at: 'beach', text: 'Meet Lena at the beach', sub: 'The city is yours now' },
+      { kind: 'collect', lm: 'bank', radius: 80, text: 'Grab the score at Bay National Bank', wanted: 4 },
+      { kind: 'goto', lm: 'safehouse', radius: 120, text: 'Escape to the Sunset Safehouse' },
     ],
+    reward: 5000,
   },
 ];
 
-/* Mission runtime state. One mission runs at a time; steps run in order
-   and the next mission starts a couple of seconds after the last one pays out. */
-const MissionManager = {
-  index: 0,            // 0-based mission index; MISSIONS.length means story done
-  stepIndex: 0,
-  state: 'idle',       // idle | active | done
-  kills: 0,
-  collected: 0,
-  escapeTimer: 0,
-  marker: null,        // {x, y} of the current objective, or null
-  stealTarget: null,   // traffic car to steal, for steal steps
-  spawned: [],         // enemies spawned for the current fight step
+// Runtime state for the mission chain.
+export function makeMissionState() {
+  return { index: 0, step: 0, timer: 0, done: false, won: false, packageAt: null };
+}
 
-  current() { return MISSIONS[this.index] || null; },
+// The current step's world position (from its landmark), or null.
+export function currentTarget(city, ms) {
+  const m = MISSIONS[ms.index];
+  if (!m || ms.done) return null;
+  const step = m.steps[ms.step];
+  if (!step || !step.lm) return null;
+  const lm = landmark(city, step.lm);
+  return lm ? { x: lm.x, y: lm.y, radius: step.radius || 100, text: step.text } : null;
+}
 
-  step() {
-    const m = this.current();
-    return m ? m.steps[this.stepIndex] : null;
-  },
+export function currentStepText(ms) {
+  const m = MISSIONS[ms.index];
+  if (!m) return '';
+  if (ms.done) return 'All jobs done — Palmera Bay is yours.';
+  const step = m.steps[ms.step];
+  return step ? step.text : '';
+}
 
-  startMission(i) {
-    this.index = i;
-    this.stepIndex = 0;
-    this.state = 'active';
-    this.kills = 0;
-    this.collected = 0;
-    this.spawned = [];
-    const m = this.current();
-    Game.showDialogue(m.intro);
-    this.beginStep();
-  },
+export function currentMissionTitle(ms) {
+  const m = MISSIONS[ms.index];
+  return m ? m.title : 'Free roam';
+}
 
-  beginStep() {
-    const s = this.step();
-    if (!s) {
-      this.completeMission();
-      return;
-    }
-    this.kills = 0;
-    this.collected = 0;
-    this.spawned = [];
-    const spot = s.at ? City.missionSpots[s.at] : null;
-    this.marker = spot ? { x: spot.x, y: spot.y } : null;
-    if (s.type === 'escape') {
-      this.marker = null;
-      this.escapeTimer = 0;
-      Game.addWanted(3);
-      Game.showToast('LOSE THE COPS!');
-    }
-    if (s.type === 'steal') {
-      // Park a shiny target car at the spot for the player to take.
-      const model = CAR_MODELS[1];
-      const car = {
-        x: spot.x, y: spot.y, angle: 0, speed: 0, model, vertical: false, dir: 1,
-        color: model.color, honkT: 99, parked: true, id: 'mission-car', missionTarget: true,
-      };
-      Traffic.cars.push(car);
-      this.stealTarget = car;
-      this.marker = { x: spot.x, y: spot.y };
-    }
-    if (s.type === 'fight') this.spawnEnemies(s.count, spot);
-    if (s.type === 'collect') Game.spawnCashDrops(s.count, spot);
-    HUD.refreshObjective();
-  },
+// Advance the mission chain. Returns an event string when something
+// happens ('step', 'mission', 'win') or null. Mutates the player only
+// through the callbacks the caller supplies (cash, wanted).
+export function updateMissions(city, ms, player, dt, events) {
+  const m = MISSIONS[ms.index];
+  if (!m || ms.done) return null;
+  const step = m.steps[ms.step];
+  if (!step) return null;
 
-  spawnEnemies(count, spot) {
-    this.spawned = [];
-    for (let i = 0; i < count; i++) {
-      const e = {
-        x: spot.x + rand(-160, 160), y: spot.y + rand(-160, 160),
-        hp: 50, angle: 0, shootT: rand(0.6, 1.6), speed: 95,
-        skin: pick(Pedestrians.palette), shirt: '#20242e', rival: true, dead: false,
-      };
-      const fixed = City.resolveCollision(e.x, e.y, 12);
-      e.x = fixed.x;
-      e.y = fixed.y;
-      this.spawned.push(e);
-    }
-  },
+  const px = player.inCar ? player.inCar.x : player.x;
+  const py = player.inCar ? player.inCar.y : player.y;
+  let advanced = false;
 
-  onKill() {
-    this.kills++;
-    const s = this.step();
-    if (s && s.type === 'fight') {
-      HUD.refreshObjective();
-      if (this.kills >= s.count) this.nextStep();
-    }
-  },
-
-  onCollect() {
-    this.collected++;
-    const s = this.step();
-    if (s && s.type === 'collect') {
-      HUD.refreshObjective();
-      if (this.collected >= s.count) this.nextStep();
-    }
-  },
-
-  onSteal(car) {
-    const s = this.step();
-    if (s && s.type === 'steal' && car && car.missionTarget) {
-      Game.showToast('GOT IT — NOW DELIVER IT');
-      Sound.cash();
-      this.nextStep();
-    }
-  },
-
-  /* Called every frame while a mission is active. */
-  update(dt, player) {
-    if (this.state !== 'active') return;
-    const s = this.step();
-    if (!s) return;
-    if (s.type === 'goto' && this.marker) {
-      if (dist(player.x, player.y, this.marker.x, this.marker.y) < 70) this.nextStep();
-    }
-    if (s.type === 'escape') {
-      if (Game.wanted <= 0) {
-        this.escapeTimer += dt;
-        if (this.escapeTimer > 1) this.nextStep();
+  if (step.kind === 'goto' || step.kind === 'collect' || step.kind === 'deliver') {
+    const lm = landmark(city, step.lm);
+    if (lm && dist(px, py, lm.x, lm.y) < (step.radius || 100)) {
+      if (step.kind === 'deliver' && (!player.inCar || player.inCar.model.id !== 'truck')) {
+        // Deliver needs the truck; standing there on foot does not count.
       } else {
-        this.escapeTimer = 0;
+        advanced = true;
       }
     }
-    // Rival AI: close in on the player, then hold range and shoot.
-    for (const e of this.spawned) {
-      if (e.dead) continue;
-      const d = dist(e.x, e.y, player.x, player.y);
-      if (d > 150) {
-        const a = angleTo(e.x, e.y, player.x, player.y);
-        e.x += Math.cos(a) * e.speed * dt;
-        e.y += Math.sin(a) * e.speed * dt;
-        const fixed = City.resolveCollision(e.x, e.y, 12);
-        e.x = fixed.x;
-        e.y = fixed.y;
-      }
-      e.shootT -= dt;
-      if (e.shootT <= 0 && d < 460) {
-        e.shootT = rand(1.1, 2.1);
-        Combat.enemyShoot(e.x, e.y, angleTo(e.x, e.y, player.x, player.y), 8);
-      }
+    if (step.kind === 'collect' && step.wanted && player.wanted < step.wanted) {
+      player.wanted = step.wanted;
     }
-    this.spawned = this.spawned.filter((e) => !e.dead);
-  },
+    if (step.kind === 'goto' && step.wanted && player.wanted < step.wanted && advanced) {
+      player.wanted = step.wanted;
+    }
+  } else if (step.kind === 'steal') {
+    if (player.inCar && (!step.model || player.inCar.model.id === step.model)) advanced = true;
+  } else if (step.kind === 'survive') {
+    ms.timer += dt;
+    if (ms.timer >= step.seconds) advanced = true;
+  }
 
-  nextStep() {
-    Sound.pickup();
-    this.stepIndex++;
-    if (this.stepIndex >= this.current().steps.length) this.completeMission();
-    else this.beginStep();
-  },
+  if (!advanced) return null;
+  ms.timer = 0;
+  ms.step += 1;
+  if (ms.step >= m.steps.length) {
+    player.cash += m.reward;
+    events.push({ type: 'mission', text: `${m.title} complete — +$${m.reward}` });
+    ms.index += 1;
+    ms.step = 0;
+    if (ms.index >= MISSIONS.length) {
+      ms.done = true;
+      ms.won = true;
+      return 'win';
+    }
+    return 'mission';
+  }
+  return 'step';
+}
 
-  completeMission() {
-    const m = this.current();
-    Game.cash += m.reward;
-    Game.showToast('MISSION COMPLETE — +$' + fmtCash(m.reward));
-    Sound.missionDone();
-    Game.setWanted(0);
-    this.state = 'done';
-    this.marker = null;
-    Save.saveGame();
-    if (this.index + 1 < MISSIONS.length) {
-      setTimeout(() => {
-        if (Game.state === 'playing') this.startMission(this.index + 1);
-      }, 2200);
-    } else {
-      setTimeout(() => {
-        if (Game.state === 'playing') Game.storyComplete();
-      }, 2200);
-    }
-    HUD.refreshObjective();
-  },
+// ---- Heat and markers ----
 
-  /* Objective text shown in the HUD's top-left box. */
-  objectiveText() {
-    if (this.state === 'done' && this.index + 1 >= MISSIONS.length) {
-      return { title: 'NEON TIDE', text: 'Story complete — free roam!', sub: 'Palmera Bay is yours' };
-    }
-    if (this.state === 'idle' || !this.current()) {
-      return { title: 'FREE ROAM', text: 'Explore Palmera Bay', sub: 'New Game starts the story — or just cause chaos' };
-    }
-    const m = this.current();
-    const s = this.step();
-    let text = s ? s.text : m.title;
-    if (s && s.type === 'fight') text = text.replace(/\(\d+\/\d+\)/, `(${this.kills}/${s.count})`);
-    if (s && s.type === 'collect') text = text.replace(/\(\d+\/\d+\)/, `(${this.collected}/${s.count})`);
-    return { title: `MISSION ${m.id} — ${m.title}`, text, sub: s ? s.sub : '' };
-  },
-};
+// Some steps carry a wanted level: the job itself draws the heat.
+// Apply it while the step is active so the chase starts with the job.
+export function applyStepHeat(ms, player) {
+  const m = MISSIONS[ms.index];
+  if (!m || ms.done) return;
+  const step = m.steps[ms.step];
+  if (step && step.wanted && player.wanted < step.wanted) {
+    player.wanted = step.wanted;
+    player.wantedTimer = 0;
+  }
+}
+
+// Draw the mission target: a pulsing ring and a bouncing arrow, plus a
+// floating package when the step is a pickup.
+export function drawMissionTarget(ctx, cam, city, ms, time) {
+  const t = currentTarget(city, ms);
+  if (!t) return;
+  const m = MISSIONS[ms.index];
+  const step = m.steps[ms.step];
+  const pulse = 1 + Math.sin(time * 4) * 0.12;
+  ctx.strokeStyle = '#ffd94a';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(t.x - cam.x, t.y - cam.y, (t.radius * 0.45) * pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,217,74,0.18)';
+  ctx.beginPath();
+  ctx.arc(t.x - cam.x, t.y - cam.y, (t.radius * 0.45) * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  // A bouncing marker above the target so it reads from far away.
+  const bob = Math.sin(time * 5) * 6;
+  ctx.fillStyle = '#ffd94a';
+  ctx.beginPath();
+  ctx.moveTo(t.x - cam.x, t.y - 52 + bob - cam.y);
+  ctx.lineTo(t.x - 10 - cam.x, t.y - 70 + bob - cam.y);
+  ctx.lineTo(t.x + 10 - cam.x, t.y - 70 + bob - cam.y);
+  ctx.closePath();
+  ctx.fill();
+  if (step.kind === 'collect') {
+    ctx.fillStyle = '#ff9d5c';
+    ctx.fillRect(t.x - 10 - cam.x, t.y - 10 - cam.y, 20, 16);
+    ctx.fillStyle = '#ffd94a';
+    ctx.fillRect(t.x - 10 - cam.x, t.y - 3 - cam.y, 20, 3);
+  }
+}

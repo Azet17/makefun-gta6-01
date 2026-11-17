@@ -1,122 +1,115 @@
-/* Neon Tide — Palmera Bay. Shared constants and helpers.
-   Every module is a classic script, so these names live on the global scope
-   and the other files read them directly. */
-'use strict';
+// Neon Tide: Palmera Bay — shared tuning and world constants.
+// Every number here is picked for a top-down open-world drive: a city
+// big enough to get lost in, cars fast enough to outrun the Bay Police,
+// and a wanted system that forgives a quiet cruise but not a crime spree.
 
-/* The camera window and the city it looks at. */
-const VIEW_W = 1280;
-const VIEW_H = 720;
-const WORLD = 3600;
+// World size in world units (1 unit ~ 1 pixel at zoom 1).
+export const WORLD_W = 3600;
+export const WORLD_H = 2600;
 
-/* The street grid: roads run every ROAD_GAP pixels, ROAD_W wide, leaving
-   square blocks between them for buildings and parks. */
-const ROAD_GAP = 300;
-const ROAD_W = 64;
-const BLOCK = ROAD_GAP - ROAD_W;
-
-/* Palmera Bay is split into five invented districts, each with its own tint
-   that washes over the ground when the camera passes through. */
-const DISTRICTS = [
-  { name: 'Marina del Sol', x0: 0,    y0: 0,    x1: 1800, y1: 900,  tint: '#1c4a6b' },
-  { name: 'Downtown',       x0: 1800, y0: 0,    x1: 3600, y1: 1500, tint: '#3a2a5e' },
-  { name: 'Old Harbor',     x0: 0,    y0: 900,  x1: 1500, y1: 2100, tint: '#274a2e' },
-  { name: 'Coral Heights',  x0: 1500, y0: 1500, x1: 3600, y1: 2700, tint: '#5e3a2a' },
-  { name: 'Dockside',       x0: 0,    y0: 2100, x1: 3600, y1: 3600, tint: '#24344f' },
+// The five districts of Palmera Bay. Each one paints the ground a
+// different shade, spawns its own flavour of traffic and pedestrians,
+// and hosts at least one story mission.
+export const DISTRICTS = [
+  { id: 'beach',   name: 'Palmera Beach', x: 0,    y: 0,    w: 900,  h: 1300, ground: '#c9a86a', road: '#3a3f4a', accent: '#ff9d5c' },
+  { id: 'neon',    name: 'Neon Row',      x: 900,  y: 0,    w: 1200, h: 1300, ground: '#2e2a3d', road: '#23222e', accent: '#ff2e88' },
+  { id: 'harbor',  name: 'Harbor Docks',  x: 2100, y: 0,    w: 1500, h: 1300, ground: '#3d3a33', road: '#2b2a26', accent: '#ffb02e' },
+  { id: 'oldtown', name: 'Old Town',      x: 0,    y: 1300, w: 1800, h: 1300, ground: '#4a3f35', road: '#33291f', accent: '#7dd87d' },
+  { id: 'hills',   name: 'Sunset Hills',  x: 1800, y: 1300, w: 1800, h: 1300, ground: '#54423a', road: '#3a2d28', accent: '#ff5c5c' },
 ];
 
-/* Street names, invented for this city. Used for the labels painted at
-   intersections. */
-const STREETS_H = ['Sunset Row', 'Neon Ave', 'Coral St', 'Harbor Blvd', 'Palm Court', 'Tide Way', 'Marina Dr', 'Cactus Ln', 'Solano St', 'Breeze Rd', 'Lagoon St'];
-const STREETS_V = ['Ocean View', 'Palm St', 'Flamingo Ave', 'Anchor Rd', 'Vista Blvd', 'Shell St', 'Bayfront', 'Lighthouse Rd', 'Mango St', 'Reef Ave', 'Sailor Ln'];
+// The sea hems the city in on the west edge; the sand runs beside it.
+export const SEA = { x: 0, y: 0, w: 130, h: WORLD_H };
+export const SAND = { x: 130, y: 0, w: 90, h: WORLD_H };
 
-/* Traffic car models — original names, paint, and driving character.
-   top is top speed in px/s, accel the acceleration, grip the steering bite. */
-const CAR_MODELS = [
-  { name: 'Sunchaser',   color: '#e8b23a', top: 300, accel: 340, grip: 3.2, w: 46, h: 24 },
-  { name: 'Comet GT',    color: '#d43a5e', top: 360, accel: 420, grip: 3.6, w: 48, h: 24 },
-  { name: 'Tide Runner', color: '#3a9bd4', top: 330, accel: 380, grip: 3.4, w: 47, h: 24 },
-  { name: 'Dune Buggy',  color: '#7bc23a', top: 280, accel: 360, grip: 3.0, w: 44, h: 24 },
-  { name: 'Harbor Van',  color: '#c8ccd4', top: 240, accel: 280, grip: 2.8, w: 52, h: 26 },
-  { name: 'Night Taxi',  color: '#f2c200', top: 310, accel: 350, grip: 3.3, w: 46, h: 24 },
+// Avenue / street centrelines. Roads are 96 units wide.
+export const AVENUES = [420, 1020, 1620, 2220, 2820, 3360];
+export const STREETS = [340, 840, 1340, 1840, 2340];
+export const ROAD_W = 96;
+
+// Driving and walking feel.
+export const PLAYER_WALK_SPEED = 210;
+export const PLAYER_RUN_SPEED = 320;
+export const CAR_ACCEL = 620;
+export const CAR_BRAKE = 900;
+export const CAR_MAX_SPEED = 560;
+export const CAR_REVERSE_SPEED = 200;
+export const CAR_TURN = 2.9;
+export const CAR_DRAG = 0.55;
+
+// Wanted level: 0 calm .. 5 full Bay Police lockdown.
+export const WANTED_MAX = 5;
+export const WANTED_DECAY_SECONDS = 26;
+export const POLICE_PER_STAR = 2;
+
+// Player state.
+export const PLAYER_MAX_HEALTH = 100;
+export const START_CASH = 150;
+export const SAVE_KEY = 'neon-tide-palmera-bay-save-v1';
+
+// Keyboard bindings (also shown on the start screen).
+export const KEYS = {
+  up: ['KeyW', 'ArrowUp'],
+  down: ['KeyS', 'ArrowDown'],
+  left: ['KeyA', 'ArrowLeft'],
+  right: ['KeyD', 'ArrowRight'],
+  enterCar: ['KeyE'],
+  punch: ['Space'],
+  horn: ['KeyH'],
+  pause: ['KeyP', 'Escape'],
+  mute: ['KeyM'],
+  save: ['KeyF'],
+};
+
+// Small deterministic RNG so the city, traffic and screenshots are
+// reproducible from a seed (the ?shot= mode uses seed 1).
+export function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+export function lerp(a, b, t) { return a + (b - a) * t; }
+export function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+export function angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
+
+// Wrap an angle to (-PI, PI].
+export function wrapAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a <= -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
+// Pick a random element with the supplied rng.
+export function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+
+// Car models the traffic spawns. Each has a colour set, size and top speed.
+export const CAR_MODELS = [
+  { id: 'sedan',  name: 'Bayside Sedan',  w: 46, h: 22, top: 430, colors: ['#c0392b', '#2e86c1', '#7d8a99', '#e67e22'] },
+  { id: 'taxi',   name: 'Palmera Taxi',   w: 46, h: 22, top: 450, colors: ['#f1c40f'] },
+  { id: 'sport',  name: 'Neon Comet',     w: 48, h: 21, top: 560, colors: ['#ff2e88', '#00d4ff', '#f5f5f5'] },
+  { id: 'truck',  name: 'Dock Hauler',    w: 62, h: 26, top: 330, colors: ['#5d6d7e', '#935116'] },
+  { id: 'van',    name: 'Surf Van',       w: 54, h: 24, top: 380, colors: ['#1abc9c', '#af7ac5'] },
+  { id: 'police', name: 'Bay Police',     w: 48, h: 22, top: 540, colors: ['#1a1a2e'] },
 ];
-const POLICE_COLOR = '#20264a';
-const POLICE_TOP = 380;
 
-/* How Mara moves on foot. */
-const PLAYER_SPEED = 235;
-const PLAYER_SPRINT = 330;
-const PLAYER_RADIUS = 13;
-const MAX_HEALTH = 100;
+// Pedestrian shirt colours, so the crowds do not all look alike.
+export const PED_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#ecf0f1', '#1abc9c', '#e67e22'];
 
-/* Wanted level: one star fades after this long with no new crime. */
-const WANTED_DECAY_MS = 16000;
-const MAX_WANTED = 5;
+// Wanted-level labels shown under the stars.
+export const WANTED_LABELS = [
+  'Clean — keep it that way',
+  'Heat — one patrol is looking',
+  'Wanted — patrols are closing in',
+  'Hot — roadblocks ahead',
+  'Lockdown — the whole Bay is hunting you',
+  'Five stars — nowhere is safe',
+];
 
-/* The economy: starting cash and the price of every service. */
-const START_CASH = 250;
-const GARAGE_REPAIR_COST = 60;
-const AMMO_COST = 40;
-
-/* ---- small shared helpers ---- */
-
-function clamp(v, lo, hi) {
-  return v < lo ? lo : v > hi ? hi : v;
-}
-
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
-function dist2(ax, ay, bx, by) {
-  const dx = ax - bx;
-  const dy = ay - by;
-  return dx * dx + dy * dy;
-}
-
-function dist(ax, ay, bx, by) {
-  return Math.sqrt(dist2(ax, ay, bx, by));
-}
-
-function angleTo(ax, ay, bx, by) {
-  return Math.atan2(by - ay, bx - ax);
-}
-
-/* Shortest signed turn from angle a to angle b, in (-PI, PI]. */
-function angleDiff(a, b) {
-  let d = b - a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return d;
-}
-
-function rand(lo, hi) {
-  return lo + Math.random() * (hi - lo);
-}
-
-function randInt(lo, hi) {
-  return Math.floor(rand(lo, hi + 1));
-}
-
-function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function fmtCash(n) {
-  return Math.floor(n).toLocaleString('en-US');
-}
-
-/* Which district is a world point in? Falls back to the whole city. */
-function districtAt(x, y) {
-  for (const d of DISTRICTS) {
-    if (x >= d.x0 && x < d.x1 && y >= d.y0 && y < d.y1) return d.name;
-  }
-  return 'Palmera Bay';
-}
-
-/* True when a point sits on asphalt: within a road's width of a grid line
-   in either direction. */
-function onRoad(x, y) {
-  const mx = ((x % ROAD_GAP) + ROAD_GAP) % ROAD_GAP;
-  const my = ((y % ROAD_GAP) + ROAD_GAP) % ROAD_GAP;
-  return mx < ROAD_W || mx > ROAD_GAP - 2 || my < ROAD_W || my > ROAD_GAP - 2;
-}
+// Screenshot mode (?shot=...) — fixed scenes the maker captures.
+export const SHOT_SCENES = ['start', 'drive', 'chase', 'mission'];
