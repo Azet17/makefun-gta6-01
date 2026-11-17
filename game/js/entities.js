@@ -1,276 +1,271 @@
 // Neon Tide — Palmera Bay: everything that moves.
-// Cars (player, police, traffic, parked), pedestrians, and the small
-// arcade physics that makes them feel like a top-down getaway game.
-// A car is a point with an angle, a speed and a length; steering only
-// bites while the car is moving, and grip bleeds sideways velocity away.
+// Player car, police cruisers, traffic and pedestrians share one
+// small car model: position, heading, speed, and a draw routine.
+// No file here knows about missions or the HUD; it only moves cars.
+'use strict';
 
-// --- Cars ---------------------------------------------------------------
-
-function makeCar(kind, x, y, angle, color) {
+function makeCar(x, y, angle, color, color2) {
   return {
-    kind,            // 'player' | 'police' | 'traffic' | 'parked'
-    x, y, angle,
-    speed: 0,
-    color,
-    length: kind === 'police' ? 46 : 44,
-    width: 22,
-    hp: 100,
-    maxHp: 100,
-    // Police state.
-    bustTimer: 0,
-    sirenPhase: 0,
-    stuckTimer: 0,
-    // Traffic state: which road it follows and which way it turns.
-    roadKind: null,
-    roadAt: 0,
-    dir: 1,
-    turnAt: 0,
-    // Skid marks and smoke this car left behind.
-    skidding: false,
-    dead: false,
+    x, y, angle, speed: 0,
+    color, color2: color2 || color,
+    w: 46, h: 22, radius: 20,
+    steer: 0, crashed: 0,
   };
 }
 
-// One physics step for a driven car. throttle -1..1, steer -1..1, handbrake
-// true/false. The car accelerates along its nose, steering turns it in
-// proportion to speed, and grip damps the sideways slide.
-function driveCar(car, throttle, steer, handbrake, dt, tune) {
-  const accel = throttle > 0 ? tune.accel : tune.reverse;
-  car.speed += throttle * accel * dt;
-  if (throttle === 0) {
-    // Rolling resistance: the car coasts to a stop.
-    const drag = 90 * dt;
-    if (Math.abs(car.speed) <= drag) car.speed = 0;
-    else car.speed -= Math.sign(car.speed) * drag;
+// --- Player -------------------------------------------------------------
+function makePlayer(city) {
+  const p = makeCar(1600, 1180, -Math.PI / 2, CONFIG.PLAYER.color, CONFIG.PLAYER.color2);
+  p.health = CONFIG.PLAYER.health;
+  p.money = CONFIG.START_MONEY;
+  p.wanted = 0;
+  p.onFoot = false;
+  p.footX = p.x; p.footY = p.y;
+  p.footAngle = p.angle;
+  p.hidden = 0;         // seconds out of police sight
+  p.invulnerable = 0;
+  return p;
+}
+
+// Drive the player car one tick. `input` is {up,down,left,right,brake}.
+function drivePlayer(player, input, dt, city) {
+  const c = CONFIG.PLAYER;
+  const onRoad = isRoad(city, player.x, player.y);
+  const grip = onRoad ? 1 : 0.82; // off-road is slower and slidey
+  if (input.up) player.speed += c.accel * grip * dt;
+  if (input.down) player.speed -= c.reverseAccel * dt;
+  if (input.brake) player.speed *= Math.pow(0.12, dt);
+  player.speed *= Math.pow(0.35, dt); // drag
+  player.speed = clamp(player.speed, -c.maxReverse, c.maxSpeed * grip);
+  const steerDir = player.speed >= 0 ? 1 : -1;
+  if (input.left) player.angle -= c.turnRate * steerDir * dt * Math.min(1, Math.abs(player.speed) / 120 + 0.25);
+  if (input.right) player.angle += c.turnRate * steerDir * dt * Math.min(1, Math.abs(player.speed) / 120 + 0.25);
+  const nx = player.x + Math.cos(player.angle) * player.speed * dt;
+  const ny = player.y + Math.sin(player.angle) * player.speed * dt;
+  const fixed = resolveBuilding(city, nx, ny, player.radius);
+  if (fixed.hit) {
+    if (Math.abs(player.speed) > 240) {
+      player.health -= 4;
+      player.crashed = 0.4;
+      player.invulnerable = Math.max(player.invulnerable, 0.5);
+    }
+    player.speed *= -0.25;
   }
-  if (handbrake) car.speed *= Math.max(0, 1 - 2.6 * dt);
-  car.speed = clamp(car.speed, -tune.maxReverse, tune.maxSpeed);
-  // Steering: sharper at low speed, gentler flat-out.
-  const steerAuthority = clamp(Math.abs(car.speed) / 140, 0, 1);
-  car.angle += steer * tune.turn * steerAuthority * Math.sign(car.speed || 1) * dt;
-  car.angle = wrapAngle(car.angle);
+  player.x = clamp(fixed.x, 24, CONFIG.WORLD_W - 24);
+  player.y = clamp(fixed.y, 24, CONFIG.WORLD_H - 24);
+  if (player.crashed > 0) player.crashed -= dt;
+  if (player.invulnerable > 0) player.invulnerable -= dt;
+}
+
+// Walk on foot: Mara leaves the car and moves as a pedestrian.
+function walkPlayer(player, input, dt, city) {
+  const speed = 150;
+  let dx = 0, dy = 0;
+  if (input.up) dy -= 1;
+  if (input.down) dy += 1;
+  if (input.left) dx -= 1;
+  if (input.right) dx += 1;
+  if (dx || dy) {
+    const len = Math.sqrt(dx * dx + dy * dy);
+    player.footAngle = Math.atan2(dy / len, dx / len);
+    const nx = player.footX + (dx / len) * speed * dt;
+    const ny = player.footY + (dy / len) * speed * dt;
+    const fixed = resolveBuilding(city, nx, ny, 12);
+    if (!fixed.hit) { player.footX = nx; player.footY = ny; }
+  }
+}
+
+// --- Police -------------------------------------------------------------
+function makePolice(x, y) {
+  const car = makeCar(x, y, 0, CONFIG.POLICE.color, CONFIG.POLICE.stripe);
+  car.sirenPhase = Math.random() * Math.PI * 2;
+  car.stuck = 0;
+  return car;
+}
+
+// One police tick: steer toward the player, ram when close, and
+// recover from walls instead of grinding against them forever.
+function updatePolice(car, player, dt, city) {
+  const c = CONFIG.POLICE;
+  const px = player.onFoot ? player.footX : player.x;
+  const py = player.onFoot ? player.footY : player.y;
+  const dx = px - car.x, dy = py - car.y;
+  const d = Math.sqrt(dx * dx + dy * dy) || 1;
+  const want = Math.atan2(dy, dx);
+  let diff = want - car.angle;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  car.angle += clamp(diff, -c.turnRate * dt, c.turnRate * dt);
+  car.speed = Math.min(car.speed + c.accel * dt, c.maxSpeed);
   const nx = car.x + Math.cos(car.angle) * car.speed * dt;
   const ny = car.y + Math.sin(car.angle) * car.speed * dt;
-  // Buildings are solid: slide along them instead of passing through.
-  if (!City.collideCircle(nx, car.y, car.width * 0.55)) car.x = nx;
-  else car.speed *= 0.55;
-  if (!City.collideCircle(car.x, ny, car.width * 0.55)) car.y = ny;
-  else car.speed *= 0.55;
-  car.x = clamp(car.x, CONFIG.waterWidth + 8, CONFIG.worldWidth - 8);
-  car.y = clamp(car.y, 8, CONFIG.worldHeight - 8);
-  car.skidding = handbrake && Math.abs(car.speed) > 120;
-  return car;
+  const fixed = resolveBuilding(city, nx, ny, car.radius);
+  if (fixed.hit) {
+    car.speed *= 0.3;
+    car.stuck += dt;
+    if (car.stuck > 1.2) { // back out and re-aim
+      car.angle += Math.PI * 0.7;
+      car.stuck = 0;
+    }
+  } else if (car.stuck > 0) {
+    car.stuck = Math.max(0, car.stuck - dt);
+  }
+  car.x = clamp(fixed.x, 24, CONFIG.WORLD_W - 24);
+  car.y = clamp(fixed.y, 24, CONFIG.WORLD_H - 24);
+  car.sirenPhase += dt * 6;
+  return d;
 }
 
-// Circle collision between two cars (treated as circles of their half-width
-// plus a little length). Returns true when they overlap.
-function carsOverlap(a, b) {
-  const r = (a.width + b.width) * 0.5 + 6;
-  return dist(a.x, a.y, b.x, b.y) < r;
+// --- Traffic ------------------------------------------------------------
+function makeTraffic(city, rng, player) {
+  const cars = [];
+  for (let i = 0; i < CONFIG.TRAFFIC.count; i++) {
+    const p = randomRoadPoint(city, rng, player.x, player.y, 500);
+    const color = CONFIG.TRAFFIC.colors[i % CONFIG.TRAFFIC.colors.length];
+    const car = makeCar(p.x, p.y, p.vertical ? Math.PI / 2 : 0, color, color);
+    car.cruise = CONFIG.TRAFFIC.speed * (0.8 + rng() * 0.4);
+    car.vertical = p.vertical;
+    car.turnAt = 0;
+    cars.push(car);
+  }
+  return cars;
 }
 
-// Push two overlapping cars apart and trade a little speed between them.
-function separateCars(a, b) {
-  const d = dist(a.x, a.y, b.x, b.y) || 1;
-  const r = (a.width + b.width) * 0.5 + 6;
-  const overlap = r - d;
-  if (overlap <= 0) return;
-  const nx = (b.x - a.x) / d, ny = (b.y - a.y) / d;
-  a.x -= nx * overlap * 0.5; a.y -= ny * overlap * 0.5;
-  b.x += nx * overlap * 0.5; b.y += ny * overlap * 0.5;
-  const push = 26;
-  a.speed -= push * 0.4; b.speed += push * 0.4;
-}
-
-// --- Police AI ----------------------------------------------------------
-
-// Steer a police car toward the player. Police take the racing line: they
-// aim a little ahead of the player, cut corners, and ram when close.
-function policeStep(car, player, dt) {
-  const tune = { accel: CONFIG.policeAccel, reverse: 120, maxSpeed: CONFIG.policeMaxSpeed, maxReverse: 90, turn: CONFIG.policeTurn };
-  const d = dist(car.x, car.y, player.x, player.y);
-  // Aim ahead of the player by a fraction of their speed.
-  const lead = clamp(d / 420, 0.15, 0.6);
-  const tx = player.x + Math.cos(player.angle) * (player.speed || 0) * lead;
-  const ty = player.y + Math.sin(player.angle) * (player.speed || 0) * lead;
-  const want = angleTo(car.x, car.y, tx, ty);
-  const diff = wrapAngle(want - car.angle);
-  const steer = clamp(diff * 1.8, -1, 1);
-  const throttle = Math.abs(diff) > 1.9 ? -0.5 : 1;
-  driveCar(car, throttle, steer, false, dt, tune);
-  car.sirenPhase += dt * 2.2;
-  // Stuck detection: if the car barely moved while trying, reverse out.
-  if (Math.abs(car.speed) < 12) car.stuckTimer += dt;
-  else car.stuckTimer = 0;
-  if (car.stuckTimer > 1.2) {
-    car.angle += Math.PI * 0.7;
-    car.stuckTimer = -1.5;
+// Traffic follows the grid: drive straight, turn at intersections,
+// never leave the road. Cheap, but it reads as real traffic.
+function updateTraffic(car, dt, city) {
+  car.speed = car.cruise;
+  const nx = car.x + Math.cos(car.angle) * car.speed * dt;
+  const ny = car.y + Math.sin(car.angle) * car.speed * dt;
+  const ahead = nearestRoadPoint(city, nx, ny);
+  if (dist2(nx, ny, ahead.x, ahead.y) > 90 * 90) {
+    // Off the grid: snap back onto the nearest road and re-aim.
+    car.x = ahead.x; car.y = ahead.y;
+    car.angle = ahead.vertical ? Math.PI / 2 : 0;
+    return;
   }
-  return car;
-}
-
-// --- Traffic AI ---------------------------------------------------------
-
-// A traffic car cruises its road and turns at random intersections.
-function trafficStep(car, dt, rng) {
-  const tune = { accel: 200, reverse: 0, maxSpeed: CONFIG.trafficSpeed, maxReverse: 0, turn: CONFIG.trafficTurn };
-  if (car.roadKind === null) {
-    const road = City.nearestRoad(car.x, car.y);
-    car.roadKind = road.kind;
-    car.roadAt = road.at;
-    car.dir = rng() < 0.5 ? 1 : -1;
-    car.angle = car.roadKind === 'avenue'
-      ? (car.dir > 0 ? Math.PI / 2 : -Math.PI / 2)
-      : (car.dir > 0 ? 0 : Math.PI);
+  // At an intersection, sometimes turn onto the cross street.
+  const onCross = (Math.abs(nx % 400) < 40 && Math.abs(ny % 400) < 40);
+  if (onCross && Math.random() < dt * 0.25) {
+    car.angle += (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2;
   }
-  // Follow the road centre: steer gently toward the lane line.
-  const laneOffset = 14;
-  let wantAngle;
-  if (car.roadKind === 'avenue') {
-    const laneX = car.roadAt + laneOffset * (car.dir > 0 ? 1 : -1);
-    wantAngle = (car.dir > 0 ? Math.PI / 2 : -Math.PI / 2) + clamp((laneX - car.x) * 0.004, -0.5, 0.5);
-  } else {
-    const laneY = car.roadAt + laneOffset * (car.dir > 0 ? 1 : -1);
-    wantAngle = (car.dir > 0 ? 0 : Math.PI) + clamp((laneY - car.y) * 0.004, -0.5, 0.5);
-  }
-  const diff = wrapAngle(wantAngle - car.angle);
-  const steer = clamp(diff * 2.2, -1, 1);
-  driveCar(car, 1, steer, false, dt, tune);
-  // At an intersection, sometimes turn onto the crossing road.
-  const road = City.nearestRoad(car.x, car.y);
-  const onCross = car.roadKind === 'avenue'
-    ? Math.abs(car.y - road.at) < 8 && road.kind === 'street'
-    : Math.abs(car.x - road.at) < 8 && road.kind === 'avenue';
-  if (onCross && rng() < 0.006) {
-    car.roadKind = car.roadKind === 'avenue' ? 'street' : 'avenue';
-    car.roadAt = road.at;
-    car.dir = rng() < 0.5 ? 1 : -1;
-  }
-  return car;
+  const fixed = resolveBuilding(city, nx, ny, car.radius);
+  car.x = fixed.x; car.y = fixed.y;
 }
 
 // --- Pedestrians --------------------------------------------------------
-
-// A pedestrian strolls along a sidewalk, turns at corners, and flees from
-// fast cars nearby. They are decoration with a little self-preservation.
-function makePedestrian(x, y, rng) {
-  return {
-    x, y,
-    angle: rng() * Math.PI * 2,
-    speed: 34 + rng() * 26,
-    color: ['#e85d75', '#5d8fe8', '#e8b45d', '#7ad67a', '#c95de8'][Math.floor(rng() * 5)],
-    fleeing: 0,
-  };
-}
-
-function pedestrianStep(ped, cars, dt, rng) {
-  // Flee from the nearest fast car.
-  let nearest = Infinity;
-  for (const car of cars) {
-    if (Math.abs(car.speed || 0) < 60) continue;
-    const d = dist(ped.x, ped.y, car.x, car.y);
-    if (d < nearest) nearest = d;
-  }
-  if (nearest < 90) ped.fleeing = 0.9;
-  if (ped.fleeing > 0) {
-    ped.fleeing -= dt;
-    // Run away from the road: toward the nearest building side is fine,
-    // any direction off the asphalt counts.
-    const road = City.nearestRoad(ped.x, ped.y);
-    const away = road.kind === 'avenue'
-      ? (ped.x < road.at ? -1 : 1)
-      : (ped.y < road.at ? -1 : 1);
-    ped.angle = road.kind === 'avenue' ? (away > 0 ? 0 : Math.PI) : (away > 0 ? Math.PI / 2 : -Math.PI / 2);
-    ped.x += Math.cos(ped.angle) * 130 * dt;
-    ped.y += Math.sin(ped.angle) * 130 * dt;
-    return ped;
-  }
-  // Stroll: keep walking, bounce off buildings and water.
-  const nx = ped.x + Math.cos(ped.angle) * ped.speed * dt;
-  const ny = ped.y + Math.sin(ped.angle) * ped.speed * dt;
-  if (City.collideCircle(nx, ny, 8) || City.isWater(nx, ny) || nx < CONFIG.waterWidth + CONFIG.beachWidth) {
-    ped.angle += (rng() < 0.5 ? 1 : -1) * (Math.PI / 2 + rng() * 0.6);
-  } else {
-    ped.x = nx; ped.y = ny;
-  }
-  ped.x = clamp(ped.x, CONFIG.waterWidth + CONFIG.beachWidth + 4, CONFIG.worldWidth - 4);
-  ped.y = clamp(ped.y, 4, CONFIG.worldHeight - 4);
-  return ped;
-}
-
-// The player's drive tune, straight from CONFIG so the feel lives in one place.
-function playerTune() {
-  return {
-    accel: CONFIG.playerAccel,
-    reverse: CONFIG.playerReverse,
-    maxSpeed: CONFIG.playerMaxSpeed,
-    maxReverse: CONFIG.playerMaxReverse,
-    turn: CONFIG.playerTurn,
-  };
-}
-
-// Damage a car; returns true when the hit wrecked it. Wrecked cars smoke
-// and slow down hard, and a wrecked player car ends the run.
-function damageCar(car, amount) {
-  car.hp = Math.max(0, car.hp - amount);
-  if (car.hp <= 0) car.dead = true;
-  return car.dead;
-}
-
-// A wrecked car still rolls, but barely: cap its speed hard.
-function wreckedCap(car) {
-  if (car.dead) car.speed = clamp(car.speed, -40, 40);
-}
-
-// --- Spawning -----------------------------------------------------------
-
-// Spawn parked cars along the kerbs: some near the hideout for mission 1,
-// the rest scattered over the city. Returns an array of parked cars.
-function spawnParkedCars(rng, count) {
-  const cars = [];
-  for (let i = 0; i < count; i++) {
-    const spot = City.randomRoadPoint(rng);
-    const color = PARKED_CAR_COLORS[Math.floor(rng() * PARKED_CAR_COLORS.length)];
-    const car = makeCar('parked', spot.x, spot.y, spot.angle, color);
-    // Parked cars sit half on the kerb, engine off.
-    car.x += Math.cos(spot.angle + Math.PI / 2) * 16;
-    car.y += Math.sin(spot.angle + Math.PI / 2) * 16;
-    cars.push(car);
-  }
-  return cars;
-}
-
-// The gold supercar for the final mission, parked outside the casino.
-function spawnGoldCar() {
-  const c = City.data.landmarks.casino;
-  const car = makeCar('parked', c.x + 60, c.y + 40, Math.PI / 2, '#ffd94a');
-  car.gold = true;
-  car.length = 48;
-  return car;
-}
-
-// Spawn traffic cars spread across the city.
-function spawnTraffic(rng, count) {
-  const cars = [];
-  for (let i = 0; i < count; i++) {
-    const spot = City.randomRoadPoint(rng);
-    const color = TRAFFIC_CAR_COLORS[Math.floor(rng() * TRAFFIC_CAR_COLORS.length)];
-    const car = makeCar('traffic', spot.x, spot.y, spot.angle, color);
-    cars.push(car);
-  }
-  return cars;
-}
-
-// Spawn pedestrians on the sidewalks near the roads.
-function spawnPedestrians(rng, count) {
+function makePeds(city, rng, player) {
   const peds = [];
-  for (let i = 0; i < count; i++) {
-    const spot = City.randomRoadPoint(rng);
-    const side = rng() < 0.5 ? -1 : 1;
-    const x = clamp(spot.x + Math.cos(spot.angle + Math.PI / 2) * 34 * side, CONFIG.waterWidth + CONFIG.beachWidth + 6, CONFIG.worldWidth - 6);
-    const y = clamp(spot.y + Math.sin(spot.angle + Math.PI / 2) * 34 * side, 6, CONFIG.worldHeight - 6);
-    if (City.collideCircle(x, y, 8)) continue;
-    peds.push(makePedestrian(x, y, rng));
+  for (let i = 0; i < CONFIG.PEDS.count; i++) {
+    const p = randomRoadPoint(city, rng, player.x, player.y, 350);
+    peds.push({
+      x: p.x + (rng() - 0.5) * 60, y: p.y + (rng() - 0.5) * 60,
+      angle: rng() * Math.PI * 2,
+      speed: CONFIG.PEDS.speed * (0.7 + rng() * 0.6),
+      color: CONFIG.PEDS.colors[i % CONFIG.PEDS.colors.length],
+      turnIn: 1 + rng() * 4, panic: 0,
+    });
   }
   return peds;
+}
+
+function updatePed(ped, dt, city, player) {
+  const px = player.onFoot ? player.footX : player.x;
+  const py = player.onFoot ? player.footY : player.y;
+  const d = Math.sqrt(dist2(ped.x, ped.y, px, py));
+  if (d < 90 && Math.abs(player.speed || 0) > 60) ped.panic = 1.5; // flee the car
+  if (ped.panic > 0) {
+    ped.panic -= dt;
+    ped.angle = Math.atan2(ped.y - py, ped.x - px);
+  } else {
+    ped.turnIn -= dt;
+    if (ped.turnIn <= 0) {
+      ped.angle += (Math.random() - 0.5) * 2.4;
+      ped.turnIn = 1 + Math.random() * 4;
+    }
+  }
+  const nx = ped.x + Math.cos(ped.angle) * ped.speed * (ped.panic > 0 ? 2.2 : 1) * dt;
+  const ny = ped.y + Math.sin(ped.angle) * ped.speed * (ped.panic > 0 ? 2.2 : 1) * dt;
+  const fixed = resolveBuilding(city, nx, ny, 10);
+  if (!fixed.hit) { ped.x = clamp(nx, 20, CONFIG.WORLD_W - 20); ped.y = clamp(ny, 20, CONFIG.WORLD_H - 20); }
+}
+
+// --- Pickups ------------------------------------------------------------
+function makePickups(city, rng) {
+  const items = [];
+  for (let i = 0; i < CONFIG.PICKUPS.cash; i++) {
+    const p = randomRoadPoint(city, rng, 1600, 1200, 200);
+    items.push({ kind: 'cash', x: p.x, y: p.y, value: CONFIG.PICKUPS.cashValue, taken: false });
+  }
+  for (let i = 0; i < CONFIG.PICKUPS.repair; i++) {
+    const p = randomRoadPoint(city, rng, 1600, 1200, 200);
+    items.push({ kind: 'repair', x: p.x, y: p.y, value: CONFIG.PICKUPS.repairValue, taken: false });
+  }
+  return items;
+}
+
+// --- Drawing ------------------------------------------------------------
+// All drawing is plain canvas 2D: rounded rectangles, circles and
+// gradients, no image assets at all.
+function drawCar(ctx, car, isPolice) {
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, -car.w / 2 + 3, -car.h / 2 + 4, car.w, car.h, 7);
+  ctx.fill();
+  const grad = ctx.createLinearGradient(-car.w / 2, 0, car.w / 2, 0);
+  grad.addColorStop(0, car.color2);
+  grad.addColorStop(0.55, car.color);
+  grad.addColorStop(1, car.color2);
+  ctx.fillStyle = grad;
+  roundRect(ctx, -car.w / 2, -car.h / 2, car.w, car.h, 7);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(10,16,32,0.85)'; // cabin glass
+  roundRect(ctx, -6, -car.h / 2 + 4, 18, car.h - 8, 4);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,220,0.9)'; // headlights
+  ctx.fillRect(car.w / 2 - 2, -car.h / 2 + 2, 3, 5);
+  ctx.fillRect(car.w / 2 - 2, car.h / 2 - 7, 3, 5);
+  ctx.fillStyle = 'rgba(255,40,40,0.85)'; // tail lights
+  ctx.fillRect(-car.w / 2 - 1, -car.h / 2 + 2, 3, 5);
+  ctx.fillRect(-car.w / 2 - 1, car.h / 2 - 7, 3, 5);
+  if (isPolice) {
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BAY PD', 0, 3);
+    const flash = Math.sin(car.sirenPhase || 0) > 0;
+    ctx.fillStyle = flash ? '#ff2233' : '#2563eb';
+    ctx.beginPath();
+    ctx.arc(-14, -car.h / 2 + 1, 4, 0, Math.PI * 2);
+    ctx.arc(8, -car.h / 2 + 1, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Speed in km/h for the HUD: world units per second, scaled.
+function carSpeedKmh(car) { return Math.abs(car.speed || 0) * 0.42; }
+
+function drawPed(ctx, ped) {
+  ctx.save();
+  ctx.translate(ped.x, ped.y);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(1, 2, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = ped.color;
+  ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1f2937';
+  ctx.beginPath(); ctx.arc(0, -1, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }

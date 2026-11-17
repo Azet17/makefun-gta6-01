@@ -3,86 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Neon Tide — Palmera Bay: an original top-down open-world crime game. Steal cars, outrun the Bay Police, run six story missions across five districts.">
 <title>Neon Tide — Palmera Bay</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<noscript><p style="color:#fff;text-align:center;padding:20px">Neon Tide needs JavaScript to run.</p></noscript>
 <div id="stage">
   <canvas id="game" width="1280" height="720"></canvas>
 
-  <!-- In-game HUD -->
-  <div id="hud" class="hidden">
-    <div id="hudTop">
-      <div id="missionBox">
-        <div id="missionTitle">NEON TIDE</div>
-        <div id="missionObjective">Press Enter to start the story</div>
-        <div id="missionTimer"></div>
+  <div id="hud" class="hud">
+    <div class="hud-top-left">
+      <div class="health-row">
+        <span class="label">MARA VOSS</span>
+        <div class="health-bar"><div id="health-fill" class="fill"></div></div>
+        <span id="health-text" class="health-text">100 HP</span>
       </div>
-      <div id="wantedBox">
-        <div id="wanted">☆☆☆☆☆</div>
-        <div id="district">Palmera Bay</div>
-      </div>
-      <div id="cashBox">
-        <div id="cash">$250</div>
-        <div id="carHealth">ON FOOT</div>
-        <div id="healthBar"><div id="healthFill" class="health-fill" style="width:100%"></div></div>
-      </div>
+      <div id="wanted-stars" class="stars">☆☆☆☆☆</div>
+      <div id="district-text" class="district">Neon Row</div>
     </div>
-    <div id="speedBox">
-      <span id="speed">0</span><span id="speedUnit"> km/h</span>
-    </div>
-    <canvas id="minimap" width="168" height="168"></canvas>
-    <div id="message"></div>
-    <div id="hint"></div>
-    <div id="fps">60 FPS</div>
-  </div>
-  <div id="damageFlash"></div>
 
-  <!-- Title screen -->
-  <div id="titleScreen" class="screen">
-    <div class="panel">
-      <h1>NEON TIDE</h1>
-      <h2>Palmera Bay</h2>
-      <p class="tagline">Mara Voss steals cars. The Bay Police steal them back.<br>
-      Six missions. Five districts. One gold supercar.</p>
-      <div id="startStats">
-        <span id="startCash">$250</span>
-        <span id="startProgress">0% complete — 0 of 6 missions</span>
-      </div>
-      <div id="missionList"></div>
-      <p class="controls">WASD / arrows — drive &amp; walk &nbsp;·&nbsp; E — steal / exit car &nbsp;·&nbsp;
-      Space — handbrake &nbsp;·&nbsp; H — horn &nbsp;·&nbsp; M — mute &nbsp;·&nbsp; P — pause</p>
-      <p class="enter">Press ENTER to play</p>
-      <p class="save-note">Progress saves automatically — pick up where you left off.</p>
+    <div class="hud-top-right">
+      <div id="money-text" class="money">$250</div>
+      <div id="speed-text" class="speed">0 km/h</div>
     </div>
+
+    <div class="hud-bottom-left">
+      <div id="mission-text" class="mission">Mission 1/6: Hot Wheels</div>
+      <div class="controls-hint">WASD drive · F enter / steal car · Space brake · P pause · M mute</div>
+    </div>
+
+    <div class="hud-bottom-right">
+      <canvas id="minimap" width="190" height="150"></canvas>
+      <div class="minimap-label">PALMERA BAY</div>
+    </div>
+
+    <div id="toast" class="toast"></div>
   </div>
 
-  <!-- Pause screen -->
-  <div id="pauseScreen" class="screen hidden">
-    <div class="panel">
-      <h1>PAUSED</h1>
-      <p class="tagline">Palmera Bay waits for no one. Except now.</p>
-      <p class="enter">Press P to resume</p>
+  <div id="overlay-menu" class="overlay">
+    <div class="panel menu-panel">
+      <div class="kicker">AN OPEN-WORLD CRIME GAME</div>
+      <h1>NEON<br>TIDE</h1>
+      <div class="subtitle">— Palmera Bay —</div>
+      <p class="story">Mara Voss came back to Palmera Bay with nothing but a grudge and a
+      talent for other people's cars. Six missions. Five districts. One way out:
+      the boat at the end of the pier.</p>
+      <div class="menu-buttons">
+        <button id="btn-start" class="btn primary">▶ NEW GAME</button>
+        <button id="btn-continue" class="btn">CONTINUE</button>
+      </div>
+      <div class="menu-foot">
+        <span>WASD / arrows — drive</span><span>F — steal / enter car</span>
+        <span>Space — brake</span><span>P — pause</span><span>M — mute</span>
+      </div>
+      <p class="save-note">Progress saves automatically to this browser.</p>
     </div>
   </div>
 
-  <!-- Busted screen -->
-  <div id="bustedScreen" class="screen hidden">
+  <div id="overlay-pause" class="overlay hidden">
     <div class="panel">
-      <h1>BUSTED</h1>
-      <p class="tagline" id="bustedText">The Bay Police caught Mara.</p>
-      <p class="enter">Press ENTER to get back on the street</p>
+      <h2>PAUSED</h2>
+      <p class="story">Palmera Bay waits for no one. Except right now.</p>
+      <div class="menu-buttons">
+        <button id="btn-resume" class="btn primary">RESUME</button>
+        <button id="btn-restart" class="btn">RESTART MISSION</button>
+        <button id="btn-menu" class="btn">MAIN MENU</button>
+      </div>
     </div>
   </div>
 
-  <!-- Mission complete screen -->
-  <div id="completeScreen" class="screen hidden">
+  <div id="overlay-end" class="overlay hidden">
     <div class="panel">
-      <h1 id="completeTitle">MISSION COMPLETE</h1>
-      <p class="tagline" id="completeText">Mission complete.</p>
-      <p class="enter">Press ENTER to continue</p>
+      <h2 id="end-title">BUSTED</h2>
+      <p id="end-text" class="story">The Bay Police caught Mara.</p>
+      <div class="menu-buttons">
+        <button id="btn-retry" class="btn primary">TRY AGAIN (R)</button>
+        <button id="btn-menu-end" class="btn">MAIN MENU</button>
+      </div>
     </div>
   </div>
 </div>

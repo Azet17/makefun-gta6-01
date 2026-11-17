@@ -1,39 +1,39 @@
-// Neon Tide — Palmera Bay: the entry program (Node 22, standard library only).
-// It copies this repository's game/ and screenshots/ to /output and writes
-// /output/dossier.json with the vendored make.fun library, exactly as the
-// bounty asks. Outside the grader, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-// The program is deterministic: two runs write the same bytes.
-
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+// Neon Tide — Palmera Bay: the entrypoint (Node 22, stdlib only).
+// Copies game/ and screenshots/ from this repository into the output
+// directory and writes /output/dossier.json with buildDossier from
+// vendor/makefun-game.ts. Deterministic: the same repository always
+// writes the same bytes, so the grader's two runs agree.
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)));
+const outputDir = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) {
-  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+function copyTree(name: string): void {
+  const src = join(repoRoot, name);
+  const dest = join(outputDir, name);
+  if (!existsSync(src)) throw new Error(`main.ts: ${name}/ is missing from the repository`);
+  cpSync(src, dest, { recursive: true });
 }
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes
-// the bytes; the others refuse an entry the scorer would refuse (more than
-// 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB
-// of game files in all, or a path under game/ over 1000 bytes).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+mkdirSync(outputDir, { recursive: true });
+// Start from an empty output directory so a stale file from an
+// earlier run can never leak into the dossier.
+for (const name of ['game', 'screenshots', 'dossier.json']) {
+  const target = join(outputDir, name);
+  if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+}
+copyTree('game');
+copyTree('screenshots');
 
-console.log('Neon Tide handed in: game/ + screenshots/ + dossier.json in ' + out);
-console.log('Play it locally with: node serve.ts  (then http://localhost:8080)');
+const dossier = buildDossier(outputDir, {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+});
+if (dossier.length === 0) throw new Error('main.ts: buildDossier wrote an empty dossier');
+writeFileSync(join(outputDir, 'dossier.json'), dossier);
+console.log(`Neon Tide — Palmera Bay: wrote ${outputDir}/dossier.json (${dossier.length} bytes)`);

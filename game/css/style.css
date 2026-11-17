@@ -1,274 +1,332 @@
-/* Neon Tide — Palmera Bay: HUD and menu styling.
-   Neon-on-midnight: hot pink titles, gold accents, glass panels. */
+/* Neon Tide — Palmera Bay: dark neon styling for the HUD and menus.
+   The game canvas is drawn by main.js; this file only dresses the
+   page around it: full-viewport stage, glass HUD panels, neon title. */
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; }
 
 html, body {
-  background: #0b0e1a;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  color: #f2f2f2;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #020617;
+  color: #e2e8f0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   overflow: hidden;
 }
 
 #stage {
   position: relative;
-  width: 1280px;
-  height: 720px;
-  margin: 0 auto;
-  overflow: hidden;
-  background: #14648c;
-}
-
-#game { display: block; width: 1280px; height: 720px; }
-
-.hidden { display: none !important; }
-
-/* --- HUD ------------------------------------------------------------ */
-
-#hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
-
-#hudTop {
-  position: absolute;
-  top: 0; left: 0; right: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 14px 16px;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(1200px 700px at 50% 30%, #1e1b4b 0%, #020617 70%);
 }
 
-#missionBox {
-  background: rgba(8, 10, 24, 0.72);
-  border-left: 4px solid #ffd94a;
+#game {
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  display: block;
   border-radius: 6px;
-  padding: 10px 14px;
-  max-width: 460px;
+  box-shadow: 0 0 60px rgba(255, 47, 179, 0.25), 0 0 120px rgba(47, 212, 255, 0.12);
+  background: #0b1220;
 }
 
-#missionTitle {
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-  color: #ffd94a;
-}
-
-#missionObjective { font-size: 14px; margin-top: 3px; color: #fff; }
-
-#missionTimer {
-  font-size: 22px;
-  font-weight: 800;
-  color: #ff5d5d;
-  margin-top: 2px;
-}
-
-#wantedBox { text-align: center; }
-
-#wanted {
-  font-size: 26px;
-  letter-spacing: 4px;
-  color: #ffd94a;
-  text-shadow: 0 0 12px rgba(255, 217, 74, 0.7);
-}
-
-#wanted.hot { color: #ff3b30; text-shadow: 0 0 14px rgba(255, 59, 48, 0.9); }
-
-#district {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  background: rgba(8, 10, 24, 0.72);
-  border-radius: 4px;
-  padding: 4px 10px;
-  margin-top: 4px;
-}
-
-#cashBox {
-  background: rgba(8, 10, 24, 0.72);
-  border-right: 4px solid #4fc94f;
-  border-radius: 6px;
-  padding: 10px 14px;
-  text-align: right;
-  min-width: 150px;
-}
-
-#cash { font-size: 22px; font-weight: 800; color: #4fc94f; }
-
-#carHealth { font-size: 12px; font-weight: 700; color: #ddd; margin-top: 2px; }
-
-#healthBar {
-  height: 8px;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
-  margin-top: 4px;
-  overflow: hidden;
-}
-
-.health-fill {
-  height: 100%;
-  background: #4fc94f;
-  border-radius: 4px;
-  transition: width 0.2s;
-}
-
-.health-fill.low { background: #ff3b30; }
-
-#speedBox {
-  position: absolute;
-  right: 18px;
-  bottom: 54px;
-  font-size: 34px;
-  font-weight: 800;
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-}
-
-#speedUnit { font-size: 15px; font-weight: 600; color: #ffd94a; }
-
-#minimap {
-  position: absolute;
-  right: 16px;
-  top: 96px;
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  border-radius: 6px;
-  background: #1a2a3a;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
-}
-
-#message {
-  position: absolute;
-  top: 108px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 760px;
-  text-align: center;
-  font-size: 19px;
-  font-weight: 700;
-  color: #fff;
-  background: rgba(8, 10, 24, 0.78);
-  border: 1px solid rgba(255, 217, 74, 0.6);
-  border-radius: 8px;
-  padding: 10px 18px;
-  transition: opacity 0.3s;
-}
-
-#hint {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(8, 10, 24, 0.6);
-  border-radius: 4px;
-  padding: 5px 12px;
-  white-space: nowrap;
-}
-
-#fps {
-  position: absolute;
-  left: 14px;
-  bottom: 12px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-#damageFlash {
+/* --- HUD -------------------------------------------------------------- */
+.hud {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 55%, rgba(255, 0, 0, 0.55) 100%);
-  opacity: 0;
-  transition: opacity 0.25s;
   pointer-events: none;
-  z-index: 6;
+  font-size: 14px;
 }
 
-/* --- Screens ---------------------------------------------------------- */
+.hud-top-left {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
-.screen {
+.health-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(2, 6, 23, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 7px 12px;
+  backdrop-filter: blur(3px);
+}
+
+.label {
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  font-size: 12px;
+  color: #ff2fb3;
+}
+
+.health-bar {
+  width: 150px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.health-bar .fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  transition: width 0.2s ease;
+}
+
+.health-bar .fill.mid { background: linear-gradient(90deg, #eab308, #facc15); }
+.health-bar .fill.low { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+.health-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+  min-width: 48px;
+}
+
+.stars {
+  font-size: 26px;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.35);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  padding-left: 4px;
+}
+
+.stars.warm { color: #fbbf24; text-shadow: 0 0 14px rgba(251, 191, 36, 0.7); }
+.stars.hot { color: #ef4444; text-shadow: 0 0 16px rgba(239, 68, 68, 0.9); }
+
+.district {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+  padding-left: 4px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+}
+
+.hud-top-right {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.money {
+  font-size: 30px;
+  font-weight: 900;
+  color: #4ade80;
+  text-shadow: 0 0 16px rgba(74, 222, 128, 0.55), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.speed {
+  font-size: 20px;
+  font-weight: 800;
+  color: #f8fafc;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+.hud-bottom-left {
+  position: absolute;
+  left: 20px;
+  bottom: 18px;
+  max-width: 560px;
+}
+
+.mission {
+  background: rgba(2, 6, 23, 0.62);
+  border-left: 4px solid #ffd23f;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  backdrop-filter: blur(3px);
+}
+
+.controls-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.75);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.hud-bottom-right {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  text-align: center;
+}
+
+#minimap {
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  background: #0b1220;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+}
+
+.minimap-label {
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: rgba(226, 232, 240, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.toast {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(255, 210, 63, 0.55);
+  color: #fde68a;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  max-width: 640px;
+  text-align: center;
+}
+
+.toast.show { opacity: 1; }
+
+/* --- Overlays and menus ------------------------------------------------ */
+.overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, rgba(11, 14, 26, 0.88), rgba(46, 16, 60, 0.82));
+  background: rgba(2, 6, 23, 0.45);
+  pointer-events: auto;
   z-index: 10;
 }
 
+.overlay.hidden { display: none; }
+
 .panel {
   text-align: center;
-  max-width: 720px;
-  padding: 36px 44px;
+  background: rgba(2, 6, 23, 0.82);
+  border: 1px solid rgba(255, 47, 179, 0.4);
+  border-radius: 16px;
+  padding: 34px 44px;
+  max-width: 620px;
+  box-shadow: 0 0 50px rgba(255, 47, 179, 0.28), 0 24px 60px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.menu-panel { border-color: rgba(47, 212, 255, 0.45); }
+
+.kicker {
+  font-size: 12px;
+  letter-spacing: 0.34em;
+  color: #2fd4ff;
+  font-weight: 700;
 }
 
 .panel h1 {
-  font-size: 64px;
+  margin: 10px 0 0;
+  font-size: 74px;
+  line-height: 0.92;
   font-weight: 900;
-  letter-spacing: 6px;
-  background: linear-gradient(90deg, #ff5da2, #ffd94a, #4fd2ff);
+  letter-spacing: 0.02em;
+  background: linear-gradient(100deg, #ff2fb3 10%, #ffd23f 55%, #2fd4ff 95%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 34px rgba(255, 93, 162, 0.35);
+  text-shadow: 0 0 44px rgba(255, 47, 179, 0.35);
 }
 
 .panel h2 {
-  font-size: 26px;
-  font-weight: 300;
-  letter-spacing: 10px;
-  color: #8fd8ff;
-  margin-top: -6px;
+  margin: 0 0 10px;
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #f8fafc;
 }
 
-.tagline {
-  font-size: 16px;
-  line-height: 1.55;
-  color: #e8e8e8;
-  margin: 18px 0;
-}
-
-#startStats {
-  display: flex;
-  gap: 24px;
-  justify-content: center;
-  font-size: 16px;
+.subtitle {
+  margin-top: 8px;
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  color: #facc15;
   font-weight: 700;
-  margin: 10px 0 16px;
 }
 
-#startCash { color: #4fc94f; }
-#startProgress { color: #ffd94a; }
-
-#missionList { text-align: left; margin: 8px auto 18px; max-width: 620px; }
-
-.mission-row {
-  font-size: 12.5px;
-  line-height: 1.45;
-  padding: 5px 10px;
-  border-radius: 4px;
-  margin: 3px 0;
-  background: rgba(255, 255, 255, 0.06);
-  color: #cfcfcf;
+.story {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  margin: 18px auto 22px;
+  max-width: 480px;
 }
 
-.mission-row.done { color: #7be07b; border-left: 3px solid #4fc94f; }
-.mission-row.next { color: #fff; border-left: 3px solid #ffd94a; background: rgba(255, 217, 74, 0.12); }
-.mission-row.locked { opacity: 0.6; }
+.menu-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
-.controls { font-size: 13px; color: #b8c4d8; line-height: 1.7; }
-
-.enter {
-  font-size: 19px;
+.btn {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
   font-weight: 800;
-  letter-spacing: 2px;
-  color: #ffd94a;
-  margin-top: 20px;
-  animation: pulse 1.4s ease-in-out infinite;
+  letter-spacing: 0.08em;
+  font-size: 15px;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  padding: 12px 22px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 
-.save-note { font-size: 12px; color: #8a93a8; margin-top: 10px; }
+.btn:hover { transform: translateY(-2px); background: rgba(255, 255, 255, 0.16); }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+.btn.primary {
+  background: linear-gradient(100deg, #ff2fb3, #7c3aed);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 6px 24px rgba(255, 47, 179, 0.45);
 }
 
+.btn.primary:hover { box-shadow: 0 10px 30px rgba(255, 47, 179, 0.65); }
+
+.btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+.menu-foot {
+  margin-top: 22px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.save-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+@media (max-width: 760px) {
+  .panel h1 { font-size: 46px; }
+  .panel { padding: 22px; margin: 12px; }
+  #minimap { width: 130px; height: 103px; }
+}

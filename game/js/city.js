@@ -1,229 +1,177 @@
 // Neon Tide — Palmera Bay: the city itself.
-// A seeded procedural city: a road grid, five districts, a beach and bay on
-// the west edge, parks, and the story landmarks (chop shop, casino, marina,
-// docks, penthouse, hideout). Everything the game draws or collides with
-// comes from the tables built here.
+// A seeded generator lays out the road grid, the five districts, the
+// beach, the docks and every building, then answers the two questions
+// the rest of the game keeps asking: "is this road?" and "did I hit
+// a building?" Nothing here touches the canvas or the player.
+'use strict';
 
-const City = (function () {
-  const city = {
-    buildings: [],   // {x, y, w, h, color, district, roof}
-    parks: [],       // {x, y, w, h}
-    roadblocks: [],  // {x, y, angle, broken}
-    landmarks: {},   // named story spots: {x, y, label, color}
-    avenues: [],     // x positions of north-south road centres
-    streets: [],     // y positions of east-west road centres
-    pickups: [],     // repair wrench spots {x, y, taken}
-    seed: 20261118,
+// Small deterministic RNG (mulberry32) so a seeded run rebuilds the
+// exact same city: screenshots stay reproducible.
+function makeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
 
-  // Build the whole city from a seed. Called once at load and again only
-  // when the player starts a brand-new story.
-  function build(seed) {
-    city.seed = seed;
-    const rng = mulberry32(seed);
-    city.buildings = [];
-    city.parks = [];
-    city.roadblocks = [];
-    city.pickups = [];
-    city.avenues = [];
-    city.streets = [];
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function dist2(ax, ay, bx, by) { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
 
-    const W = CONFIG.worldWidth, H = CONFIG.worldHeight;
-    const bw = CONFIG.blockWidth, bh = CONFIG.blockHeight, rw = CONFIG.roadWidth;
-    const cityX0 = CONFIG.waterWidth + CONFIG.beachWidth; // city starts east of the sand
+// Build the whole city from a seed. Returns { roads, buildings,
+// districts, beach, docks, piers, parks, pickups }.
+function buildCity(seed) {
+  const rng = makeRng(seed || 1337);
+  const W = CONFIG.WORLD_W, H = CONFIG.WORLD_H;
+  const roads = [];
+  const buildings = [];
+  const parks = [];
 
-    // Avenue centres: from the first road east of the beach to the east edge.
-    for (let x = cityX0 + rw / 2 + bw / 2; x < W - rw; x += bw + rw) city.avenues.push(x);
-    for (let y = rw / 2 + bh / 2; y < H - rw; y += bh + rw) city.streets.push(y);
+  // Roads: a regular grid, 400 units apart, 56 wide. Verticals and
+  // horizontals alike, so every block is reachable from every other.
+  const spacing = 400, roadW = 56;
+  for (let x = 0; x <= W; x += spacing) {
+    roads.push({ x: x - roadW / 2, y: 0, w: roadW, h: H, vertical: true });
+  }
+  for (let y = 0; y <= H; y += spacing) {
+    roads.push({ x: 0, y: y - roadW / 2, w: W, h: roadW, vertical: false });
+  }
+  // Two diagonal avenues so the grid never feels like graph paper.
+  roads.push({ x: 0, y: 0, w: W, h: roadW, vertical: false, diag: 0.35 });
+  roads.push({ x: 0, y: 0, w: roadW, h: H, vertical: true, diag: -0.3 });
 
-    // One building (sometimes two, sometimes a park) per city block.
-    const roofColors = [
-      CONFIG.palette.buildingRoof, CONFIG.palette.buildingRoof2,
-      CONFIG.palette.buildingRoof3, CONFIG.palette.buildingRoof4,
-      CONFIG.palette.buildingRoof5,
-    ];
-    for (let ai = 0; ai < city.avenues.length - 1; ai++) {
-      for (let si = 0; si < city.streets.length - 1; si++) {
-        const bx0 = city.avenues[ai] + rw / 2 + CONFIG.sidewalk;
-        const by0 = city.streets[si] + rw / 2 + CONFIG.sidewalk;
-        const bx1 = city.avenues[ai + 1] - rw / 2 - CONFIG.sidewalk;
-        const by1 = city.streets[si + 1] - rw / 2 - CONFIG.sidewalk;
-        const roll = rng();
-        if (roll < 0.12) {
-          // A park: trees, benches, no buildings.
-          city.parks.push({ x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 });
-          continue;
+  // Buildings fill the blocks between roads. Each block gets one to
+  // four buildings with a gap for a sidewalk; the beach strip and the
+  // dock yard stay open.
+  const beach = { x: 1600, y: 2050, w: 1600, h: 350 };
+  const docks = { x: 0, y: 0, w: 1100, h: 340 };
+  for (let bx = 0; bx < 8; bx++) {
+    for (let by = 0; by < 6; by++) {
+      const blockX = bx * spacing + roadW / 2 + 14;
+      const blockY = by * spacing + roadW / 2 + 14;
+      const blockW = spacing - roadW - 28;
+      const blockH = spacing - roadW - 28;
+      // Beach strip: sand, palms and the boardwalk, no buildings.
+      if (blockY + blockH > beach.y && blockX > beach.x) continue;
+      // Docks: containers and cranes instead of buildings.
+      if (blockY < docks.h && blockX < docks.w) {
+        if (rng() < 0.55) {
+          buildings.push({
+            x: blockX + rng() * 120, y: blockY + rng() * 120,
+            w: 90 + rng() * 60, h: 40 + rng() * 30,
+            kind: 'container', color: pick(rng, ['#b45309', '#0e7490', '#9d174d', '#166534']),
+            district: districtAt(blockX + 40, blockY + 40).name,
+          });
         }
-        if (roll < 0.2) {
-          // An open plaza with a fountain square.
-          city.parks.push({ x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0, plaza: true });
-          continue;
-        }
-        const district = districtAt((bx0 + bx1) / 2, (by0 + by1) / 2);
-        const split = rng() < 0.45;
-        if (split) {
-          const midX = bx0 + (bx1 - bx0) * (0.42 + rng() * 0.16);
-          addBuilding(bx0 + 6, by0 + 6, midX - bx0 - 12, by1 - by0 - 12, roofColors, rng, district);
-          addBuilding(midX + 6, by0 + 6, bx1 - midX - 12, by1 - by0 - 12, roofColors, rng, district);
-        } else {
-          addBuilding(bx0 + 8, by0 + 8, bx1 - bx0 - 16, by1 - by0 - 16, roofColors, rng, district);
-        }
+        continue;
+      }
+      // One plaza park per district, at most.
+      if (rng() < 0.12) {
+        parks.push({ x: blockX, y: blockY, w: blockW, h: blockH, trees: 6 + Math.floor(rng() * 6) });
+        continue;
+      }
+      const n = 1 + Math.floor(rng() * 3);
+      for (let i = 0; i < n; i++) {
+        const bw = 70 + rng() * 130, bh = 60 + rng() * 120;
+        const px = blockX + rng() * Math.max(1, blockW - bw);
+        const py = blockY + rng() * Math.max(1, blockH - bh);
+        const district = districtAt(px + bw / 2, py + bh / 2);
+        buildings.push({
+          x: px, y: py, w: bw, h: bh,
+          kind: rng() < 0.18 ? 'tower' : 'block',
+          color: shadeFor(district, rng),
+          district: district.name,
+          height: 18 + rng() * 46,
+        });
       }
     }
-
-    // Landmarks: fixed story spots on real roads, clear of buildings.
-    city.landmarks = {
-      hideout:     { x: 430,  y: 2350, label: 'Beach Hideout', color: '#e8c84a' },
-      chopShop:    { x: 1456, y: 1463, label: 'Chop Shop', color: '#e8c84a' },
-      marina:      { x: 824,  y: 665,  label: 'Marina', color: '#e8c84a' },
-      docks:       { x: 3036, y: 2527, label: 'Palm Docks', color: '#e8c84a' },
-      penthouse:   { x: 1456, y: 399,  label: 'Penthouse', color: '#e8c84a' },
-      casino:      { x: 2404, y: 665,  label: 'Neon Casino', color: '#e8c84a' },
-      repairNorth: { x: 1140, y: 1197, label: 'Repair', color: '#4fc94f' },
-      repairSouth: { x: 2088, y: 1995, label: 'Repair', color: '#4fc94f' },
-    };
-
-    // Repair pickups: drive over a wrench to fix the car.
-    city.pickups = [
-      { x: 1140, y: 1197, taken: false },
-      { x: 2088, y: 1995, taken: false },
-      { x: 1772, y: 665, taken: false },
-    ];
-
-    // Roadblocks for mission 4: two striped barriers across the roads
-    // that lead to the marina, with a narrow kerb gap on one side.
-    city.roadblocks = [
-      { x: 824, y: 1197, angle: 0, broken: false },
-      { x: 1140, y: 665, angle: Math.PI / 2, broken: false },
-    ];
-    return city;
   }
 
-  function addBuilding(x, y, w, h, roofColors, rng, district) {
-    if (w < 40 || h < 30) return;
-    const color = roofColors[Math.floor(rng() * roofColors.length)];
-    city.buildings.push({
-      x, y, w, h, color,
-      district: district ? district.name : 'Palmera Bay',
-      roof: rng() < 0.3,
-      windows: Math.floor(rng() * 3),
-    });
+  // The long pier at Sunset Beach, the finale's destination.
+  const piers = [{ x: 2900, y: 2050, w: 90, h: 300 }];
+
+  return { roads, buildings, parks, beach, docks, piers, seed };
+}
+
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+
+function shadeFor(district, rng) {
+  const base = {
+    'Old Docks': ['#2c4a5e', '#37586b', '#22384a'],
+    'Neon Row': ['#4a2c5e', '#5e2c4a', '#3a2c6e'],
+    'Palm Heights': ['#2c4a38', '#3a5e44', '#243d2c'],
+    'Market Mile': ['#5e4a2c', '#6b5432', '#4a3a22'],
+    'Sunset Beach': ['#2c425e', '#38546b', '#223850'],
+  }[district.name] || ['#333a4a'];
+  return pick(rng, base);
+}
+
+function districtAt(x, y) {
+  for (const d of CONFIG.DISTRICTS) {
+    if (x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h) return d;
   }
+  return CONFIG.DISTRICTS[4];
+}
 
-  // Which district owns a point? The first match wins; the beach and bay
-  // belong to no district and report null.
-  function districtAt(x, y) {
-    for (const d of DISTRICTS) {
-      if (x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h) return d;
-    }
-    return null;
+// Is this point on the beach sand (drives like a road, slower grip)?
+function isBeach(city, x, y) {
+  return x >= city.beach.x && x <= city.beach.x + city.beach.w &&
+    y >= city.beach.y && y <= city.beach.y + city.beach.h;
+}
+
+// Is this point on a road (or the beach, which drives like one)?
+function isRoad(city, x, y) {
+  if (isBeach(city, x, y)) return true;
+  for (const r of city.roads) {
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true;
   }
+  return false;
+}
 
-  // Is a point on a road (asphalt) rather than a block?
-  function isRoad(x, y) {
-    if (x < CONFIG.waterWidth + CONFIG.beachWidth) return false;
-    const rw = CONFIG.roadWidth / 2;
-    for (const ax of city.avenues) if (Math.abs(x - ax) <= rw) return true;
-    for (const sy of city.streets) if (Math.abs(y - sy) <= rw) return true;
-    return false;
+// Circle-vs-building collision. Returns the building hit, or null.
+function hitBuilding(city, x, y, radius) {
+  for (const b of city.buildings) {
+    const cx = clamp(x, b.x, b.x + b.w);
+    const cy = clamp(y, b.y, b.y + b.h);
+    if (dist2(x, y, cx, cy) < radius * radius) return b;
   }
+  return null;
+}
 
-  // Is a point in the water or on the sand?
-  function isWater(x, y) { return x < CONFIG.waterWidth; }
-  function isSand(x, y) {
-    return x >= CONFIG.waterWidth && x < CONFIG.waterWidth + CONFIG.beachWidth;
+// Push a circle out of a building it overlaps, and report the hit.
+function resolveBuilding(city, x, y, radius) {
+  const b = hitBuilding(city, x, y, radius);
+  if (!b) return { x, y, hit: null };
+  const cx = clamp(x, b.x, b.x + b.w);
+  const cy = clamp(y, b.y, b.y + b.h);
+  let dx = x - cx, dy = y - cy;
+  let len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) { dx = 0; dy = -1; len = 1; }
+  dx /= len; dy /= len;
+  return { x: cx + dx * radius, y: cy + dy * radius, hit: b };
+}
+
+// Nearest point on the road grid to (x, y): where traffic spawns.
+function nearestRoadPoint(city, x, y) {
+  let best = null, bestD = Infinity;
+  for (const r of city.roads) {
+    const px = clamp(x, r.x, r.x + r.w);
+    const py = clamp(y, r.y, r.y + r.h);
+    const d = dist2(x, y, px, py);
+    if (d < bestD) { bestD = d; best = { x: px, y: py, vertical: !!r.vertical }; }
   }
+  return best || { x, y, vertical: true };
+}
 
-  // The building whose rectangle contains the point, or null.
-  function buildingAt(x, y) {
-    for (const b of city.buildings) {
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b;
-    }
-    return null;
+// A random road point at least `minDist` from (x, y).
+function randomRoadPoint(city, rng, x, y, minDist) {
+  for (let tries = 0; tries < 40; tries++) {
+    const rx = 100 + rng() * (CONFIG.WORLD_W - 200);
+    const ry = 100 + rng() * (CONFIG.WORLD_H - 200);
+    const p = nearestRoadPoint(city, rx, ry);
+    if (dist2(p.x, p.y, x, y) > minDist * minDist) return p;
   }
-
-  // Circle-vs-buildings collision: returns the building hit by a circle of
-  // radius r at (x, y), or null. Used by cars and by the walking player.
-  function collideCircle(x, y, r) {
-    for (const b of city.buildings) {
-      const cx = clamp(x, b.x, b.x + b.w);
-      const cy = clamp(y, b.y, b.y + b.h);
-      const dx = x - cx, dy = y - cy;
-      if (dx * dx + dy * dy < r * r) return b;
-    }
-    return null;
-  }
-
-  // Nearest road centre to a point, and whether it is an avenue or street.
-  function nearestRoad(x, y) {
-    let bestA = null, bestAd = Infinity;
-    for (const ax of city.avenues) {
-      const d = Math.abs(x - ax);
-      if (d < bestAd) { bestAd = d; bestA = ax; }
-    }
-    let bestS = null, bestSd = Infinity;
-    for (const sy of city.streets) {
-      const d = Math.abs(y - sy);
-      if (d < bestSd) { bestSd = d; bestS = sy; }
-    }
-    if (bestAd <= bestSd) return { kind: 'avenue', at: bestA, dist: bestAd };
-    return { kind: 'street', at: bestS, dist: bestSd };
-  }
-
-  // A random point on a road, for spawning traffic and parked cars.
-  function randomRoadPoint(rng) {
-    const vertical = rng() < 0.5;
-    if (vertical) {
-      const ax = city.avenues[Math.floor(rng() * city.avenues.length)];
-      const y = CONFIG.roadWidth + rng() * (CONFIG.worldHeight - CONFIG.roadWidth * 2);
-      return { x: ax + (rng() < 0.5 ? -14 : 14), y, angle: rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2 };
-    }
-    const sy = city.streets[Math.floor(rng() * city.streets.length)];
-    const x = CONFIG.waterWidth + CONFIG.beachWidth + CONFIG.roadWidth + rng() * (CONFIG.worldWidth - CONFIG.waterWidth - CONFIG.beachWidth - CONFIG.roadWidth * 2);
-    return { x, y: sy + (rng() < 0.5 ? -14 : 14), angle: rng() < 0.5 ? 0 : Math.PI };
-  }
-
-  // A point on a road near (x, y), used to drop police in around the player.
-  function roadPointNear(x, y, distance, rng) {
-    for (let tries = 0; tries < 24; tries++) {
-      const a = rng() * Math.PI * 2;
-      const px = clamp(x + Math.cos(a) * distance, CONFIG.waterWidth + CONFIG.beachWidth + 80, CONFIG.worldWidth - 80);
-      const py = clamp(y + Math.sin(a) * distance, 80, CONFIG.worldHeight - 80);
-      const road = nearestRoad(px, py);
-      if (road.dist < CONFIG.roadWidth / 2 - 6) {
-        return road.kind === 'avenue'
-          ? { x: road.at + (rng() < 0.5 ? -14 : 14), y: py, angle: rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2 }
-          : { x: px, y: road.at + (rng() < 0.5 ? -14 : 14), angle: rng() < 0.5 ? 0 : Math.PI };
-      }
-    }
-    return { x, y: y - distance, angle: Math.PI / 2 };
-  }
-
-  // The player's story start: on the beach road by the hideout, facing east.
-  function playerSpawn() {
-    return { x: 480, y: 2350, angle: 0 };
-  }
-
-  // The roadblock whose barrier a circle of radius r at (x, y) touches, or null.
-  // A barrier is a striped bar across the road; the kerb gap at each end lets
-  // a careful driver slip past without smashing it.
-  function roadblockHit(x, y, r) {
-    for (const rb of city.roadblocks) {
-      if (rb.broken) continue;
-      const dx = x - rb.x, dy = y - rb.y;
-      const along = rb.angle === 0 ? dx : dy;
-      const across = rb.angle === 0 ? dy : dx;
-      if (Math.abs(across) < 12 + r && Math.abs(along) < 52) return rb;
-    }
-    return null;
-  }
-
-  return {
-    data: city, build, districtAt, isRoad, isWater, isSand,
-    buildingAt, collideCircle, nearestRoad, randomRoadPoint, roadPointNear,
-    playerSpawn, roadblockHit,
-  };
-})();
-
-// Build the default city at load so every module can read it.
-City.build(20261118);
+  return nearestRoadPoint(city, x + 600, y + 400);
+}

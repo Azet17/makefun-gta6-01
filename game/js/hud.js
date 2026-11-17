@@ -1,221 +1,125 @@
 // Neon Tide — Palmera Bay: the HUD.
-// The DOM bar (speed, wanted stars, cash, mission, timer, district) plus
-// the live minimap canvas in the corner. The HUD never draws the world;
-// it only reads the game state and paints the overlay.
+// DOM for the text readouts (health, wanted stars, speed, money,
+// mission line) and a small canvas for the minimap. The HUD never
+// owns game state: main.js hands it a snapshot each frame.
+'use strict';
 
-const HUD = (function () {
-  const hud = {
-    el: {},
-    minimap: null,
-    mctx: null,
-    lastSpeed: -1,
-    lastWanted: -1,
-    lastCash: -1,
+function makeHud() {
+  return {
+    healthFill: document.getElementById('health-fill'),
+    healthText: document.getElementById('health-text'),
+    stars: document.getElementById('wanted-stars'),
+    speedText: document.getElementById('speed-text'),
+    moneyText: document.getElementById('money-text'),
+    missionText: document.getElementById('mission-text'),
+    districtText: document.getElementById('district-text'),
+    toast: document.getElementById('toast'),
+    minimap: document.getElementById('minimap'),
+    toastUntil: 0,
   };
+}
 
-  // Grab every HUD element by id once the page is ready.
-  function init() {
-    const ids = ['hud', 'speed', 'speedUnit', 'wanted', 'cash', 'missionTitle',
-      'missionObjective', 'missionTimer', 'district', 'message', 'minimap',
-      'carHealth', 'healthFill', 'hint', 'titleScreen', 'pauseScreen',
-      'bustedScreen', 'completeScreen', 'startCash', 'startProgress',
-      'missionList', 'bustedText', 'completeText', 'fps'];
-    for (const id of ids) hud.el[id] = document.getElementById(id);
-    hud.minimap = hud.el.minimap;
-    if (hud.minimap) {
-      hud.minimap.width = MINIMAP_SIZE;
-      hud.minimap.height = MINIMAP_SIZE;
-      hud.mctx = hud.minimap.getContext('2d');
-    }
+// Mute button label, so the player can see the sound state at a glance.
+function hudSetSoundLabel(hud, muted) {
+  const btn = document.getElementById('btn-sound');
+  if (btn) btn.textContent = muted ? '🔇 SOUND OFF' : '🔊 SOUND ON';
+}
+
+function hudShowToast(hud, text, now, seconds) {
+  if (!hud.toast) return;
+  hud.toast.textContent = text;
+  hud.toast.classList.add('show');
+  hud.toastUntil = now + (seconds || 4);
+}
+
+function hudTickToast(hud, now) {
+  if (hud.toast && now > hud.toastUntil) hud.toast.classList.remove('show');
+}
+
+// Refresh every readout from one snapshot object:
+// { health, wanted, speedKmh, money, missionText, district, onFoot }.
+function hudUpdate(hud, snap, now) {
+  if (hud.healthFill) {
+    hud.healthFill.style.width = Math.max(0, snap.health) + '%';
+    hud.healthFill.className = 'fill' + (snap.health < 30 ? ' low' : snap.health < 60 ? ' mid' : '');
   }
-
-  function setText(el, value) {
-    if (el && el.textContent !== value) el.textContent = value;
+  if (hud.healthText) hud.healthText.textContent = Math.ceil(Math.max(0, snap.health)) + ' HP';
+  if (hud.stars) {
+    let stars = '';
+    for (let i = 0; i < 5; i++) stars += i < snap.wanted ? '★' : '☆';
+    hud.stars.textContent = stars;
+    hud.stars.className = 'stars' + (snap.wanted >= 4 ? ' hot' : snap.wanted > 0 ? ' warm' : '');
   }
+  if (hud.speedText) hud.speedText.textContent = Math.round(Math.abs(snap.speedKmh)) + ' km/h';
+  if (hud.moneyText) hud.moneyText.textContent = '$' + Math.floor(snap.money).toLocaleString('en-US');
+  if (hud.missionText) hud.missionText.textContent = snap.missionText;
+  if (hud.districtText) hud.districtText.textContent = snap.district + (snap.onFoot ? ' · on foot' : '');
+  hudTickToast(hud, now);
+}
 
-  // Stars: filled for the wanted level, empty for the rest.
-  function wantedStars(wanted) {
-    let s = '';
-    for (let i = 0; i < 5; i++) s += i < wanted ? '★' : '☆';
-    return s;
+// Draw the minimap: whole city shrunk into a 190x150 canvas, with
+// the player arrow, police dots, traffic dots and the gold mission
+// marker. North is up; the beach is the blue strip at the bottom.
+function hudDrawMinimap(hud, city, player, police, traffic, missionTarget) {
+  const canvas = hud.minimap;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const sx = w / CONFIG.WORLD_W, sy = h / CONFIG.WORLD_H;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(0, 0, w, h);
+  // District tints.
+  for (const d of CONFIG.DISTRICTS) {
+    ctx.fillStyle = d.tint;
+    ctx.fillRect(d.x * sx, d.y * sy, d.w * sx, d.h * sy);
   }
-
-  // Per-frame HUD refresh. Cheap string writes only when values change.
-  function update(game, dt) {
-    const el = hud.el;
-    const speedKmh = Math.round(Math.abs((game.playerCar ? game.playerCar.speed : 0)) * 0.36);
-    if (speedKmh !== hud.lastSpeed) {
-      setText(el.speed, String(speedKmh));
-      hud.lastSpeed = speedKmh;
-    }
-    if (game.wanted !== hud.lastWanted) {
-      setText(el.wanted, wantedStars(game.wanted));
-      if (el.wanted) el.wanted.className = 'wanted' + (game.wanted >= 3 ? ' hot' : '');
-      hud.lastWanted = game.wanted;
-    }
-    if (Missions.state.cash !== hud.lastCash) {
-      setText(el.cash, '$' + Missions.state.cash.toLocaleString('en-US'));
-      hud.lastCash = Missions.state.cash;
-    }
-    if (Missions.state.active) {
-      const d = Missions.def();
-      setText(el.missionTitle, 'MISSION ' + d.id + ' — ' + d.title);
-      setText(el.missionObjective, Missions.objectiveText());
-      setText(el.missionTimer, Missions.state.timer > 0 ? formatTime(Missions.state.timer) : '');
-    } else if (Missions.state.storyDone) {
-      setText(el.missionTitle, 'STORY COMPLETE');
-      setText(el.missionObjective, 'Mara owns Palmera Bay. Free roam — cause chaos.');
-      setText(el.missionTimer, '');
-    } else {
-      setText(el.missionTitle, 'NEON TIDE');
-      setText(el.missionObjective, 'Press Enter to start the next mission');
-      setText(el.missionTimer, '');
-    }
-    const district = City.districtAt(game.player.x, game.player.y);
-    setText(el.district, district ? district.name : (City.isSand(game.player.x, game.player.y) ? 'Palmera Beach' : 'The Bay'));
-    // Car health bar.
-    if (el.healthFill && game.playerCar) {
-      const pct = Math.max(0, game.playerCar.hp);
-      el.healthFill.style.width = pct + '%';
-      el.healthFill.className = 'health-fill' + (pct < 30 ? ' low' : '');
-      setText(el.carHealth, 'CAR ' + Math.round(pct) + '%');
-    } else if (el.healthFill) {
-      el.healthFill.style.width = '0%';
-      setText(el.carHealth, 'ON FOOT');
-    }
-    // Big centre message (mission banners, warnings).
-    if (Missions.state.messageTimer > 0 && Missions.state.message) {
-      setText(el.message, Missions.state.message);
-      if (el.message) el.message.style.opacity = String(Math.min(1, Missions.state.messageTimer));
-    } else if (el.message) {
-      el.message.style.opacity = '0';
-    }
-    // Context hint at the bottom.
-    setText(el.hint, hintFor(game));
-    drawMinimap(game);
-  }
-
-  // The one-line hint that tells the player what they can do right now.
-  function hintFor(game) {
-    if (game.mode === 'busted') return 'BUSTED — press Enter to get back on the street';
-    if (game.mode === 'complete') return 'Press Enter for the next mission';
-    if (game.mode === 'paused') return 'Paused — P to resume';
-    if (!game.playerCar) {
-      const near = game.nearestParked;
-      if (near) return 'Press E to steal the ' + (near.gold ? 'GOLD SUPERCAR' : 'car');
-      return 'WASD / arrows to walk — find a parked car and press E';
-    }
-    const keys = 'WASD drive · Space handbrake · E exit car · H horn · M mute · P pause';
-    if (game.wanted >= 3) return 'POLICE ON YOU — break line of sight! · ' + keys;
-    return keys;
-  }
-
-  // --- Minimap ----------------------------------------------------------
-
-  function drawMinimap(game) {
-    const ctx = hud.mctx;
-    if (!ctx) return;
-    const S = MINIMAP_SIZE;
-    const sx = S / CONFIG.worldWidth;
-    const sy = S / CONFIG.worldHeight;
-    ctx.clearRect(0, 0, S, S);
-    // Water and sand on the west edge.
-    ctx.fillStyle = CONFIG.palette.waterDeep;
-    ctx.fillRect(0, 0, CONFIG.waterWidth * sx, S);
-    ctx.fillStyle = CONFIG.palette.sand;
-    ctx.fillRect(CONFIG.waterWidth * sx, 0, CONFIG.beachWidth * sx, S);
-    // Land.
-    ctx.fillStyle = '#5d6b52';
-    ctx.fillRect((CONFIG.waterWidth + CONFIG.beachWidth) * sx, 0, S - (CONFIG.waterWidth + CONFIG.beachWidth) * sx, S);
-    // Parks.
-    ctx.fillStyle = CONFIG.palette.park;
-    for (const p of City.data.parks) ctx.fillRect(p.x * sx, p.y * sy, p.w * sx, p.h * sy);
-    // Roads (drawn lighter than in the world so the street grid reads).
-    ctx.fillStyle = '#9aa0ad';
-    for (const ax of City.data.avenues) ctx.fillRect((ax - CONFIG.roadWidth / 2) * sx, 0, CONFIG.roadWidth * sx, S);
-    for (const sy2 of City.data.streets) ctx.fillRect(0, (sy2 - CONFIG.roadWidth / 2) * sy, S, CONFIG.roadWidth * sy);
-    // Buildings.
-    ctx.fillStyle = 'rgba(28, 24, 22, 0.9)';
-    for (const b of City.data.buildings) ctx.fillRect(b.x * sx, b.y * sy, Math.max(1, b.w * sx), Math.max(1, b.h * sy));
-    // Mission target marker (pulsing gold dot).
-    if (Missions.state.target) {
-      const t = Missions.state.target;
-      const pulse = 3 + Math.sin(performance.now() / 240) * 1.5;
-      ctx.fillStyle = '#ffd94a';
-      ctx.beginPath();
-      ctx.arc(t.x * sx, t.y * sy, pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-    // Police blips (blue) and traffic (grey).
-    ctx.fillStyle = '#3a7bff';
-    for (const p of game.police) ctx.fillRect(p.x * sx - 2, p.y * sy - 2, 4, 4);
-    ctx.fillStyle = '#c9c9c9';
-    for (const t of game.traffic) ctx.fillRect(t.x * sx - 1, t.y * sy - 1, 2, 2);
-    // The player: a white triangle pointing where they face.
-    const px = game.player.x * sx, py = game.player.y * sy;
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(game.player.angle);
-    ctx.fillStyle = '#ffffff';
+  // Beach sand.
+  ctx.fillStyle = '#c9a86a';
+  ctx.fillRect(city.beach.x * sx, city.beach.y * sy, city.beach.w * sx, city.beach.h * sy);
+  // Roads.
+  ctx.fillStyle = '#3a4356';
+  for (const r of city.roads) ctx.fillRect(r.x * sx, r.y * sy, Math.max(1, r.w * sx), Math.max(1, r.h * sy));
+  // Mission marker: a pulsing gold ring.
+  if (missionTarget) {
+    const pulse = 4 + Math.sin(Date.now() / 240) * 2;
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(6, 0); ctx.lineTo(-4, -4); ctx.lineTo(-4, 4); ctx.closePath();
+    ctx.arc(missionTarget.x * sx, missionTarget.y * sy, pulse + 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.arc(missionTarget.x * sx, missionTarget.y * sy, 3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
-    // Border.
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0.5, 0.5, S - 1, S - 1);
   }
-
-  // --- Screens ----------------------------------------------------------
-
-  // Show exactly one overlay screen; hide the rest.
-  function showScreen(name) {
-    const screens = ['titleScreen', 'pauseScreen', 'bustedScreen', 'completeScreen'];
-    for (const s of screens) {
-      const el = hud.el[s];
-      if (el) el.classList.toggle('hidden', s !== name);
-    }
-    if (hud.el.hud) hud.el.hud.classList.toggle('hidden', name === 'titleScreen');
+  // Traffic: faint white dots.
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  for (const car of traffic) {
+    ctx.fillRect(car.x * sx - 1, car.y * sy - 1, 2, 2);
   }
-
-  // Fill the title screen with the save state: cash, progress and missions.
-  function fillTitle() {
-    setText(hud.el.startCash, '$' + Missions.state.cash.toLocaleString('en-US'));
-    const pct = Math.round(Missions.progressFraction() * 100);
-    setText(hud.el.startProgress, pct + '% complete — ' + Missions.state.completed.length + ' of 6 missions');
-    const list = hud.el.missionList;
-    if (list) {
-      list.innerHTML = '';
-      for (const m of Missions.briefingLines()) {
-        const row = document.createElement('div');
-        row.className = 'mission-row ' + m.mark.toLowerCase();
-        row.textContent = m.mark + '  ·  ' + m.id + '. ' + m.title + '  —  $' + m.cash + '  ·  ' + m.intro;
-        list.appendChild(row);
-      }
-    }
+  // Police: red-blue dots.
+  for (const car of police) {
+    ctx.fillStyle = '#ff3344';
+    ctx.beginPath(); ctx.arc(car.x * sx, car.y * sy, 3, 0, Math.PI * 2); ctx.fill();
   }
-
-  function showBusted(reason) {
-    setText(hud.el.bustedText, reason || 'The Bay Police caught Mara.');
-    showScreen('bustedScreen');
-  }
-
-  // A quick red vignette flash when the player car takes a hard hit.
-  function flashDamage() {
-    const el = document.getElementById('damageFlash');
-    if (!el) return;
-    el.style.opacity = '0.55';
-    setTimeout(() => { el.style.opacity = '0'; }, 130);
-  }
-
-  function showComplete(text) {
-    setText(hud.el.completeText, text || 'Mission complete.');
-    showScreen('completeScreen');
-  }
-
-  return { hud, init, update, wantedStars, drawMinimap, showScreen, fillTitle, showBusted, showComplete, flashDamage };
-})();
+  // Player: a pink arrow that rotates with the car.
+  const px = player.onFoot ? player.footX : player.x;
+  const py = player.onFoot ? player.footY : player.y;
+  const pa = player.onFoot ? player.footAngle : player.angle;
+  ctx.save();
+  ctx.translate(px * sx, py * sy);
+  ctx.rotate(pa);
+  ctx.fillStyle = '#ff2fb3';
+  ctx.beginPath();
+  ctx.moveTo(7, 0); ctx.lineTo(-5, -5); ctx.lineTo(-5, 5);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  // Border.
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+}
