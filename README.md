@@ -71,6 +71,15 @@ cd game && python3 -m http.server 8080
 - `game/js/game.js` — main loop, input, driving, wanted level, rendering
 - `main.ts` — the entry program: copies `game/` and `screenshots/` to the
   output directory and writes `dossier.json`
+- `serve.ts` — a tiny static server for playing `game/` locally (`node serve.ts`)
+- `shots.json` — the four screenshot scenes and the `?shot=` query that stages each one
+
+## Screenshots
+
+The four screenshots in `screenshots/` are staged renders of the game itself,
+taken in this session with `?shot=chase`, `?shot=drive`, `?shot=fight` and
+`?shot=roam`: a three-star police chase, a Downtown cruise, the dockside
+shootout, and Mara on foot near the marina.
 
 ## Originality
 

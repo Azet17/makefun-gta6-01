@@ -75,7 +75,8 @@ const MISSIONS = [
   },
 ];
 
-/* Mission runtime state. */
+/* Mission runtime state. One mission runs at a time; steps run in order
+   and the next mission starts a couple of seconds after the last one pays out. */
 const MissionManager = {
   index: 0,            // 0-based mission index; MISSIONS.length means story done
   stepIndex: 0,
@@ -83,12 +84,16 @@ const MissionManager = {
   kills: 0,
   collected: 0,
   escapeTimer: 0,
-  marker: null,        // {x, y}
+  marker: null,        // {x, y} of the current objective, or null
   stealTarget: null,   // traffic car to steal, for steal steps
   spawned: [],         // enemies spawned for the current fight step
 
   current() { return MISSIONS[this.index] || null; },
-  step() { const m = this.current(); return m ? m.steps[this.stepIndex] : null; },
+
+  step() {
+    const m = this.current();
+    return m ? m.steps[this.stepIndex] : null;
+  },
 
   startMission(i) {
     this.index = i;
@@ -104,7 +109,10 @@ const MissionManager = {
 
   beginStep() {
     const s = this.step();
-    if (!s) { this.completeMission(); return; }
+    if (!s) {
+      this.completeMission();
+      return;
+    }
     this.kills = 0;
     this.collected = 0;
     this.spawned = [];
@@ -117,19 +125,18 @@ const MissionManager = {
       Game.showToast('LOSE THE COPS!');
     }
     if (s.type === 'steal') {
-      // Park a shiny target car at the spot.
+      // Park a shiny target car at the spot for the player to take.
       const model = CAR_MODELS[1];
-      const car = { x: spot.x, y: spot.y, angle: 0, speed: 0, model, vertical: false, dir: 1, color: model.color, honkT: 99, parked: true, id: 'mission-car', missionTarget: true };
+      const car = {
+        x: spot.x, y: spot.y, angle: 0, speed: 0, model, vertical: false, dir: 1,
+        color: model.color, honkT: 99, parked: true, id: 'mission-car', missionTarget: true,
+      };
       Traffic.cars.push(car);
       this.stealTarget = car;
       this.marker = { x: spot.x, y: spot.y };
     }
-    if (s.type === 'fight') {
-      this.spawnEnemies(s.count, spot);
-    }
-    if (s.type === 'collect') {
-      Game.spawnCashDrops(s.count, spot);
-    }
+    if (s.type === 'fight') this.spawnEnemies(s.count, spot);
+    if (s.type === 'collect') Game.spawnCashDrops(s.count, spot);
     HUD.refreshObjective();
   },
 
@@ -142,7 +149,8 @@ const MissionManager = {
         skin: pick(Pedestrians.palette), shirt: '#20242e', rival: true, dead: false,
       };
       const fixed = City.resolveCollision(e.x, e.y, 12);
-      e.x = fixed.x; e.y = fixed.y;
+      e.x = fixed.x;
+      e.y = fixed.y;
       this.spawned.push(e);
     }
   },
@@ -183,10 +191,14 @@ const MissionManager = {
       if (dist(player.x, player.y, this.marker.x, this.marker.y) < 70) this.nextStep();
     }
     if (s.type === 'escape') {
-      if (Game.wanted <= 0) { this.escapeTimer += dt; if (this.escapeTimer > 1) this.nextStep(); }
-      else this.escapeTimer = 0;
+      if (Game.wanted <= 0) {
+        this.escapeTimer += dt;
+        if (this.escapeTimer > 1) this.nextStep();
+      } else {
+        this.escapeTimer = 0;
+      }
     }
-    // Rival AI: walk toward the player and shoot.
+    // Rival AI: close in on the player, then hold range and shoot.
     for (const e of this.spawned) {
       if (e.dead) continue;
       const d = dist(e.x, e.y, player.x, player.y);
@@ -195,7 +207,8 @@ const MissionManager = {
         e.x += Math.cos(a) * e.speed * dt;
         e.y += Math.sin(a) * e.speed * dt;
         const fixed = City.resolveCollision(e.x, e.y, 12);
-        e.x = fixed.x; e.y = fixed.y;
+        e.x = fixed.x;
+        e.y = fixed.y;
       }
       e.shootT -= dt;
       if (e.shootT <= 0 && d < 460) {
@@ -227,15 +240,21 @@ const MissionManager = {
         if (Game.state === 'playing') this.startMission(this.index + 1);
       }, 2200);
     } else {
-      setTimeout(() => { if (Game.state === 'playing') Game.storyComplete(); }, 2200);
+      setTimeout(() => {
+        if (Game.state === 'playing') Game.storyComplete();
+      }, 2200);
     }
     HUD.refreshObjective();
   },
 
-  /* Objective text shown in the HUD. */
+  /* Objective text shown in the HUD's top-left box. */
   objectiveText() {
-    if (this.state === 'done' && this.index + 1 >= MISSIONS.length) return { title: 'NEON TIDE', text: 'Story complete — free roam!', sub: 'Palmera Bay is yours' };
-    if (this.state === 'idle' || !this.current()) return { title: 'FREE ROAM', text: 'Explore Palmera Bay', sub: 'New Game starts the story — or just cause chaos' };
+    if (this.state === 'done' && this.index + 1 >= MISSIONS.length) {
+      return { title: 'NEON TIDE', text: 'Story complete — free roam!', sub: 'Palmera Bay is yours' };
+    }
+    if (this.state === 'idle' || !this.current()) {
+      return { title: 'FREE ROAM', text: 'Explore Palmera Bay', sub: 'New Game starts the story — or just cause chaos' };
+    }
     const m = this.current();
     const s = this.step();
     let text = s ? s.text : m.title;

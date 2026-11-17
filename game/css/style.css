@@ -1,4 +1,5 @@
-/* Neon Tide — Palmera Bay. All styling for the canvas shell, HUD and menus. */
+/* Neon Tide — Palmera Bay. All styling for the canvas shell, HUD and menus.
+   The palette is sunset neon: gold (#ffd23f), hot pink (#ff7ad9) and teal. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: #0b0e1a; }
 body {

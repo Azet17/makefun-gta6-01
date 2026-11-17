@@ -1,4 +1,5 @@
-/* Neon Tide — save system. One localStorage slot; autosaves after missions. */
+/* Neon Tide — save system. One localStorage slot; autosaves after missions
+   and every 30 seconds while playing. */
 'use strict';
 
 const SAVE_KEY = 'neon-tide-palmera-bay-save-v1';
@@ -12,7 +13,9 @@ const Save = {
       const data = JSON.parse(raw);
       if (!data || typeof data !== 'object') return null;
       return data;
-    } catch (e) { return null; }
+    } catch (e) {
+      return null;
+    }
   },
 
   hasSave() { return this.load() !== null; },
@@ -38,15 +41,21 @@ const Save = {
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   },
 
-  clear() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} },
+  clear() {
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage unavailable */ }
+  },
 
   summary() {
     const d = this.load();
     if (!d) return null;
     const date = new Date(d.savedAt);
-    return `Save: Mission ${Math.min(d.missionIndex + 1, MISSIONS.length)} of ${MISSIONS.length} · $${fmtCash(d.cash)} · ${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const missionNo = Math.min(d.missionIndex + 1, MISSIONS.length);
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `Save: Mission ${missionNo} of ${MISSIONS.length} · $${fmtCash(d.cash)} · ${date.toLocaleDateString()} ${time}`;
   },
 };

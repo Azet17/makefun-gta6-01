@@ -1,7 +1,8 @@
-// A tiny static server for game/ (Node 22, standard library only), so an entry can be played
-// locally without a build step: `node serve.ts` serves game/ on http://localhost:8080.
-// It sends the MIME types a browser game needs, refuses any path outside game/, and otherwise
-// does nothing clever: this is a development convenience, not a web server for the internet.
+// A tiny static server for game/ (Node 22, standard library only), so the
+// entry can be played locally without a build step: `node serve.ts` serves
+// game/ on http://localhost:8080. It sends the MIME types a browser game
+// needs, refuses any path outside game/, and otherwise does nothing clever:
+// a development convenience, not a web server for the internet.
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -37,17 +38,8 @@ const MIME: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://localhost');
-  let pathname: string;
-  try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    response.writeHead(400).end('bad request');
-    return;
-  }
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
+function sendFile(requestPath: string, response: import('node:http').ServerResponse): void {
+  const file = resolve(join(root, normalize(requestPath)));
   if (file !== root && !file.startsWith(root + sep)) {
     response.writeHead(403).end('forbidden');
     return;
@@ -67,6 +59,19 @@ createServer((request, response) => {
     'cache-control': 'no-store',
   });
   createReadStream(file).pipe(response);
+}
+
+createServer((request, response) => {
+  const url = new URL(request.url ?? '/', 'http://localhost');
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    response.writeHead(400).end('bad request');
+    return;
+  }
+  if (pathname.endsWith('/')) pathname += 'index.html';
+  sendFile(pathname, response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
 });
